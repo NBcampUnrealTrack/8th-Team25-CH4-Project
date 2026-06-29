@@ -6,6 +6,28 @@
 #include "GameFramework/Character.h"
 #include "FDTaggerCharacter.generated.h"
 
+// 밸런스 데이터 테이블 행 구조체 (FMatchBalanceSettings)
+// 포획 대기 시간, 무적 시간, 속도 배율 등 수치 조정용
+// 상황보고 따로 빼서 관리할 수 도 있음
+USTRUCT(BlueprintType)
+struct FMatchBalanceSettings : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// 포획 판정 대기 시간 (기본값 3초, 이 시간 안에 술래가 선택 안 하면 자동 아웃)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float CaptureJudgeTime = 3.f;
+
+	// 봐주기 무적 지속 시간 (기본값 7초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float SpareInvincibleTime = 7.f;
+
+	// 봐주기 후 숨는 자 이동 속도 배율 (기본값 1.5배)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float SpareSpeedMultiplier = 1.5f;
+};
+
 UCLASS()
 class FUNNYORDIE_API AFDTaggerCharacter : public ACharacter
 {
@@ -14,8 +36,51 @@ class FUNNYORDIE_API AFDTaggerCharacter : public ACharacter
 public:
 	AFDTaggerCharacter();
 
-protected:
-	virtual void BeginPlay() override;
+	// 외부(GameMode 등)에서 포획 대상을 직접 지정해 포획 시퀀스 시작
+	UFUNCTION(BlueprintCallable)
+	void StartCaptureSequence(ACharacter* TargetHider);
 	
-	void TryCapture(); // 공격 시도 함수
+	virtual void BeginPlay() override;
+
+	// 공격 콜리전이 숨는 자와 Overlap됐을 때 서버에서 포획 판정 실행
+	UFUNCTION()
+	void OnCaptureCollisionOverlap(
+		UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult);
+
+	// 공격 콜리전 활성화 요청 (클라이언트 → 서버)
+	UFUNCTION(Server, Reliable)
+	void Server_TryCapture();
+
+private:
+	// 포획 판정용 콜리전 컴포넌트 (에디터에서 크기 조절 가능)
+	UPROPERTY(VisibleAnywhere, Category = "Capture")
+	class USphereComponent* CaptureCollision;
+
+	// 밸런스 수치 데이터 테이블 (에디터에서 FMatchBalanceSettings 에셋 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Balance")
+	class UDataTable* BalanceDataTable;
+
+	// 현재 포획 판정 중인 숨는 자
+	UPROPERTY()
+	ACharacter* CapturedHider;
+
+	// 포획 판정 대기 타이머 (3초 후 자동 아웃)
+	FTimerHandle CaptureJudgeTimerHandle;
+
+	// 봐주기 무적 해제 타이머 (7초 후 속도·무적 복구)
+	FTimerHandle SpareExpireTimerHandle;
+
+	// 포획 시퀀스 내부 실행 함수 (서버 전용)
+	void Internal_StartCaptureSequence(ACharacter* TargetHider);
+
+	// 타이머 만료 시 자동 아웃 처리 (서버 전용)
+	void OnCaptureTimerExpired();
+
+	// 봐주기 무적·속도 버프 만료 처리 (서버 전용)
+	void OnSpareExpired(ACharacter* TargetHider);
 };
