@@ -5,6 +5,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "FDGameMode.generated.h"
 
+class ACharacter;
+
 // 게임 단계 enum
 UENUM(BlueprintType)
 enum class EMatchPhase : uint8 { Warmup, AssignRole, Scouting, InGame, GameOver };
@@ -13,11 +15,21 @@ UCLASS()
 class FUNNYORDIE_API AFDGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
-
+	
 public:
+	AFDGameMode();
+	
 	virtual void PostLogin(APlayerController* NewPlayer) override; // 접속 처리
 
 protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ACharacter> TaggerClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
+	TSubclassOf<ACharacter> HiderClass;
+	
+	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
+	
 	void StartWarmup();     // 대기
 	void AssignRoles();     // 역할 분배
 	void StartScouting();   // 정찰 60초
