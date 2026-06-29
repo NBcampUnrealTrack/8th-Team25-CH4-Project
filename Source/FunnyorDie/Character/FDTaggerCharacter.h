@@ -15,9 +15,9 @@ struct FMatchBalanceSettings : public FTableRowBase
 	GENERATED_BODY()
 
 public:
-	// 포획 판정 대기 시간 (기본값 3초, 이 시간 안에 술래가 선택 안 하면 자동 아웃)
+	// 포획 판정 대기 시간 (기본값 15초, 이 시간 안에 술래가 선택 안 하면 자동 아웃)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float CaptureJudgeTime = 3.f;
+	float CaptureJudgeTime = 15.f;
 
 	// 봐주기 무적 지속 시간 (기본값 7초)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
