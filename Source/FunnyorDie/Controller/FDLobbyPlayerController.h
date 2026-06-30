@@ -5,6 +5,8 @@
 #include "GameFramework/PlayerController.h"
 #include "FDLobbyPlayerController.generated.h"
 
+class UFDLobbyWidget;
+
 UCLASS()
 class FUNNYORDIE_API AFDLobbyPlayerController : public APlayerController
 {
@@ -15,4 +17,19 @@ public:
 	// 위젯의 Start 버튼 OnClicked에서 이 함수를 호출하면 됨
 	UFUNCTION(Server, Reliable)
 	void ServerRPC_RequestStartMatch();
+
+protected:
+	virtual void BeginPlay() override;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Lobby")
+	TSubclassOf<UFDLobbyWidget> LobbyWidgetClass;
+
+	UPROPERTY()
+	UFDLobbyWidget* LobbyWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Lobby")
+	int32 MinPlayersToStart = 3;
+
+	FTimerHandle RefreshTimerHandle;
+	void RefreshLobbyUI();
 };

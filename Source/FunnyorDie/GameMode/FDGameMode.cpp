@@ -11,6 +11,7 @@ AFDGameMode::AFDGameMode()
 	PlayerStateClass = AFDPlayerState::StaticClass();
 	DefaultPawnClass = nullptr; // PostLogin 내부 함수보면 처음에 정해진 게 없을 때 pawn 스폰할 때 defaultpawnclass로 설정하는데 
 	// tag 배정되지 않았을 땐 character 배정 안 되도록 nullptr로 막아둠 (tag별로 캐릭터가 다르니까)
+	bUseSeamlessTravel = true;
 }
 
 void AFDGameMode::PostLogin(APlayerController* NewPlayer)
