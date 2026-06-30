@@ -29,6 +29,19 @@ void AFDLobbyPlayerController::BeginPlay()
 	}
 }
 
+void AFDLobbyPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (IsLocalController())
+	{
+		SetInputMode(FInputModeGameOnly());
+		bShowMouseCursor = false;
+	}
+	
+	GetWorldTimerManager().ClearTimer(RefreshTimerHandle);
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void AFDLobbyPlayerController::RefreshLobbyUI()
 // 1초마다 호출되는 함수
 {
