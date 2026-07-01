@@ -20,6 +20,7 @@ public:
 	AFDGameMode();
 	
 	virtual void PostLogin(APlayerController* NewPlayer) override; // 접속 처리
+	virtual void StartPlay() override;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
@@ -30,7 +31,6 @@ protected:
 	
 	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
 	
-	void StartWarmup();     // 대기
 	void AssignRoles();     // 역할 분배
 	void StartScouting();   // 정찰 60초
 	void StartInGame();     // 본게임 300초

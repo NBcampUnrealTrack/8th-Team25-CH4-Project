@@ -56,7 +56,15 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_TryCapture();
 
+	// 관전 모드 (GameMode가 Phase 변화에 맞춰 호출)
+	UFUNCTION(BlueprintCallable)
+	void SetScoutingMode(bool bEnable);
+	
 private:
+	// 관전모드때 술래 메시 안보이게 하기
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_SetMeshVisibility(bool bVisible);
+	
 	// 포획 판정용 콜리전 컴포넌트 (에디터에서 크기 조절 가능)
 	UPROPERTY(VisibleAnywhere, Category = "Capture")
 	class USphereComponent* CaptureCollision;

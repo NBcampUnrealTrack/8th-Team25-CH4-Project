@@ -61,6 +61,29 @@ void AFDTaggerCharacter::OnCaptureCollisionOverlap(
 	Internal_StartCaptureSequence(HiderCharacter);
 }
 
+void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!Movement) return;
+	
+	if (bEnable)
+	{
+		Movement->MaxWalkSpeed = 1200.f;
+	}
+	else
+	{
+		Movement->MaxWalkSpeed = 600.0f;
+	}
+	
+	Multicast_SetMeshVisibility(!bEnable);
+	// 관전 모드 진입하면 메시 숨겨야 하니까 반대값 전달 (false가 전달됨)
+}
+
+void AFDTaggerCharacter::Multicast_SetMeshVisibility_Implementation(bool bVisible)
+{
+	GetMesh()->SetVisibility(bVisible, true);
+}
+
 void AFDTaggerCharacter::StartCaptureSequence(ACharacter* TargetHider)
 {
 	// GameMode 등 외부에서 직접 포획 시퀀스를 시작할 때 사용

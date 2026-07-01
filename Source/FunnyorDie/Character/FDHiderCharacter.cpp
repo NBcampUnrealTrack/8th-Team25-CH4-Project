@@ -5,6 +5,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
+#include "GameState/FDGameState.h"
+#include "PlayerState/FDPlayerState.h"
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
@@ -21,6 +23,23 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
 	const FVector& SrcLocation) const
 {
+	if (const AController* ViewerController = Cast<AController>(RealViewer))
+		// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
+	{
+		if (const AFDPlayerState* FDViewerPS = ViewerController->GetPlayerState<AFDPlayerState>())
+		{
+			if (const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>())
+			{
+				if (FDGameState->CurrentPhase == EMatchPhase::Scouting &&
+					FDViewerPS->RoleTag == EFDRole::Tagger) 
+					// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
+				{
+					return false;
+				}
+			}
+		}
+	}
+	
 	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
 }
 

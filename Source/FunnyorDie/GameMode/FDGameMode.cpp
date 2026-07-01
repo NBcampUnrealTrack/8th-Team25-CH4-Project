@@ -5,6 +5,8 @@
 #include "GameFramework/Character.h"     
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameState/FDGameState.h"
+#include "Character/FDTaggerCharacter.h"
 
 AFDGameMode::AFDGameMode()
 {
@@ -17,12 +19,6 @@ AFDGameMode::AFDGameMode()
 void AFDGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
-	// 디버깅 로그
-	UE_LOG(LogTemp, Warning, TEXT("[GameMode] PostLogin: %s 접속, 현재 인원 %d"),
-		*NewPlayer->GetName(), GameState->PlayerArray.Num());
-	
-	// 디버그용임 실제 start 버튼 만들기 전까지 자동으로 start (5초 후 자동 시작)
-	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::AssignRoles, 5.f, false);
 }
 
 UClass* AFDGameMode::GetDefaultPawnClassForController_Implementation(AController* InController) 
@@ -43,12 +39,23 @@ UClass* AFDGameMode::GetDefaultPawnClassForController_Implementation(AController
 	// DefaultPawnClass(=nullptr)를 리턴해서 스폰 안됨
 }
 
-void AFDGameMode::StartWarmup()
+void AFDGameMode::StartPlay() // 게임 시작
 {
+	Super::StartPlay();
+	
+	// 맵 옮겨오고 5초뒤에 Role 배정 시작
+	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::AssignRoles, 5.f, false);
 }
 
-void AFDGameMode::AssignRoles()
+void AFDGameMode::AssignRoles() // 롤 배정
 {
+	if (AFDGameState* FDGameState = GetGameState<AFDGameState>())
+	{
+		FDGameState->CurrentPhase = EMatchPhase::AssignRole; 
+		// GameState에 현재 Phase 설정
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] AssignRole 단계 시작"));
+	}
+	
 	TArray<APlayerState*> Players = GameState->PlayerArray;
 	if (Players.Num() == 0) return;
 
@@ -78,21 +85,45 @@ void AFDGameMode::AssignRoles()
 			RestartPlayer(Controller); // postlogin 내부에 있음
 		}
 	}
+	
+	// 다음 단계로 넘어감 (1초뒤 다음 함수 예약)
+	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartScouting, 1.f, false);
 }
 
-void AFDGameMode::StartScouting()
+void AFDGameMode::StartScouting() // 정찰 모드
+{
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	FDGameState->CurrentPhase = EMatchPhase::Scouting;
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] Scouting 단계 시작"));
+	
+	// 캐릭터 이동 관련 코드는 헷갈릴 것 같아서 캐릭터쪽에 구현
+	
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS || FDPS->RoleTag != EFDRole::Tagger) continue; // 술래 태그인 사람 찾기
+
+		if (AFDTaggerCharacter* TaggerChar = Cast<AFDTaggerCharacter>(FDPS->GetPawn()))
+		{
+			TaggerChar->SetScoutingMode(true); // 캐릭터 쪽에 구현해놓은 술래 정찰모드 켜기
+		}
+	}
+
+	// 60초 후 본게임 시작
+	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, 60.f, false);
+}
+
+void AFDGameMode::StartInGame() // 본게임 시작
 {
 }
 
-void AFDGameMode::StartInGame()
+void AFDGameMode::EndMatch() // 게임 끝
 {
 }
 
-void AFDGameMode::EndMatch()
-{
-}
-
-void AFDGameMode::RequestCaptureJudgement()
+void AFDGameMode::RequestCaptureJudgement() 
 {
 }
 
