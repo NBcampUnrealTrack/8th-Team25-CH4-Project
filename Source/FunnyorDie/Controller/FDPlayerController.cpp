@@ -132,7 +132,7 @@ void AFDPlayerController::Server_RequestOut_Implementation()
 	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
 	if (!Tagger) return;
 
-	// TODO: TaggerCharacter에 ForceOut() 노출 후 연동
+	Tagger->ForceOut();
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 술래가 아웃 선택"));
 }
 
@@ -148,7 +148,7 @@ void AFDPlayerController::Server_RequestSpare_Implementation()
 	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
 	if (!Tagger) return;
 
-	// TODO: 봐주기 키 확정 후 TaggerCharacter 연동
+	Tagger->RequestSpare();
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 술래가 봐주기 선택"));
 }
 

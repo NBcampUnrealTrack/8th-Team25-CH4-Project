@@ -36,8 +36,11 @@ protected:
 	void StartInGame();     // 본게임 300초
 	void EndMatch();        // 종료
 
-	void RequestCaptureJudgement(); // 포획 판정 시작
-	void ResolveCapture();          // 포획 최종 확인
+public:
+	void RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter); // 포획 판정 시작
+	// 태그가 Hider, Tagger라서 character 변수명은 뒤에 character 붙임
+	
+	void ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured); // 포획 최종 확인
 
 	FTimerHandle PhaseTimerHandle; // 단계 전환용 타이머
 };

@@ -111,22 +111,80 @@ void AFDGameMode::StartScouting() // 정찰 모드
 		}
 	}
 
-	// 60초 후 본게임 시작
-	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, 60.f, false);
+	// 60초 후 본게임 시작 -> 디버깅동안은 20초로 변경
+	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, 20.f, false);
 }
 
 void AFDGameMode::StartInGame() // 본게임 시작
 {
+	// 정찰 모드 종료 — Scouting에서 켰던 걸 대칭으로 끔
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS || FDPS->RoleTag != EFDRole::Tagger) continue;
+
+		if (AFDTaggerCharacter* TaggerChar = Cast<AFDTaggerCharacter>(FDPS->GetPawn()))
+		{
+			TaggerChar->SetScoutingMode(false);
+		}
+	}
+	
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	FDGameState->CurrentPhase = EMatchPhase::InGame;
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] InGame 단계 시작"));
+
+	// 생존한 숨는사람 수 저장해두기 
+	int32 HiderCount = 0;
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		if (const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS))
+		{
+			if (FDPS->RoleTag == EFDRole::Hider)
+			{
+				++HiderCount;
+			}
+		}
+	}
+	FDGameState->AliveHiderCount = HiderCount; // 그걸 GameState의 replication 되는 alivehidercount에 넣음
+	
+	// 300초 후 게임 종료
+	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::EndMatch, 300.f, false);
 }
 
 void AFDGameMode::EndMatch() // 게임 끝
 {
 }
 
-void AFDGameMode::RequestCaptureJudgement() 
+void AFDGameMode::RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter)
 {
+	UE_LOG(LogTemp, Warning, TEXT("RequestCaptureJudgement 불림"));
+
+	if (!TaggerCharacter || !HiderCharacter) return;
+	
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState || FDGameState->CurrentPhase != EMatchPhase::InGame) return;
+	// 본게임 중이 아니면 판정 안함
+	
+	TaggerCharacter->StartCaptureSequence(HiderCharacter); 
 }
 
-void AFDGameMode::ResolveCapture()
+void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 {
+	if (!HiderCharacter || !bWasCaptured) return;
+
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	--FDGameState->AliveHiderCount;
+	
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 포획 확정 - 생존 하이더 %d명 남음"), FDGameState->AliveHiderCount);
+
+	if (FDGameState->AliveHiderCount <= 0)
+	{
+		EndMatch();
+	}
 }
+
+

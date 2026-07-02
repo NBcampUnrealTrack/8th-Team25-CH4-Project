@@ -7,6 +7,7 @@
 #include "Components/SphereComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
+#include "GameMode/FDGameMode.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -29,6 +30,7 @@ void AFDTaggerCharacter::BeginPlay()
 			this, &AFDTaggerCharacter::OnCaptureCollisionOverlap);
 	}
 }
+
 
 void AFDTaggerCharacter::Server_TryCapture_Implementation()
 {
@@ -56,9 +58,14 @@ void AFDTaggerCharacter::OnCaptureCollisionOverlap(
 
 	ACharacter* HiderCharacter = Cast<ACharacter>(OtherActor);
 	if (!HiderCharacter) return;
-
-	// TODO: Gameplay Tag로 숨는 자 진영 확인 후 포획 시퀀스 시작
-	Internal_StartCaptureSequence(HiderCharacter);
+	
+	// 판정은 GameMode에서 하도록 
+	if (AFDGameMode* FDGameMode = GetWorld()->GetAuthGameMode<AFDGameMode>())
+	{
+		FDGameMode->RequestCaptureJudgement(this, HiderCharacter);
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("[술래] 콜리전 겹침 감지"));
 }
 
 void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
@@ -89,6 +96,8 @@ void AFDTaggerCharacter::StartCaptureSequence(ACharacter* TargetHider)
 	// GameMode 등 외부에서 직접 포획 시퀀스를 시작할 때 사용
 	if (!HasAuthority() || !TargetHider) return;
 	Internal_StartCaptureSequence(TargetHider);
+	
+	UE_LOG(LogTemp, Warning, TEXT("RequestCaptureJudgement 불림"));
 }
 
 void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
@@ -116,6 +125,8 @@ void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
 		HiderPC->DisableInput(HiderPC);
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("UI 뜰 거임"));
+
 	// 술래 화면에 포획 팝업 UI 호출 (PlayerController 연동)
 	if (AFDPlayerController* FDController = Cast<AFDPlayerController>(GetController()))
 	{
@@ -139,21 +150,10 @@ void AFDTaggerCharacter::OnCaptureTimerExpired()
 	// 타이머 만료 = 술래가 선택하지 않음 → 자동 아웃 처리
 	if (!CapturedHider) return;
 
-	// 두 플레이어 입력 복구
-	if (APlayerController* TaggerPC = Cast<APlayerController>(GetController()))
-	{
-		TaggerPC->EnableInput(TaggerPC);
-	}
-	if (APlayerController* HiderPC = Cast<APlayerController>(CapturedHider->GetController()))
-	{
-		HiderPC->EnableInput(HiderPC);
-	}
+	Internal_ResolveCaptureLocally(true);
 
-	// TODO: GameMode 생존자 카운트 감소 및 숨는 자 탈락 처리 연동
 	UE_LOG(LogTemp, Log, TEXT("[술래] 포획 판정 타이머 만료 - 자동 아웃 처리: %s"),
 		*CapturedHider->GetName());
-
-	CapturedHider = nullptr;
 }
 
 void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
@@ -171,4 +171,59 @@ void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
 
 	UE_LOG(LogTemp, Log, TEXT("[술래] 봐주기 만료 - 속도·무적 복구: %s"),
 		*TargetHider->GetName());
+}
+
+void AFDTaggerCharacter::Internal_ResolveCaptureLocally(bool bWasCaptured) 
+// 아웃이든 봐주기든 똑같이 실행되어야 하는건 하나로 묶음 
+{
+	// 타이머 끄기 (결과가 정해졌으니 자동 만료 타이머 필요 없음)
+	GetWorldTimerManager().ClearTimer(CaptureJudgeTimerHandle);
+	
+	// 양쪽 입력 원복시킴
+	if (APlayerController* TaggerPC = Cast<APlayerController>(GetController()))
+	{
+		TaggerPC->EnableInput(TaggerPC);
+	}
+	if (APlayerController* HiderPC = Cast<APlayerController>(CapturedHider->GetController()))
+	{
+		HiderPC->EnableInput(HiderPC);
+	}
+	
+	// 게임모드에 알림
+	if (AFDGameMode* FDGameMode = GetWorld()->GetAuthGameMode<AFDGameMode>())
+	{
+		FDGameMode->ResolveCapture(CapturedHider, bWasCaptured);
+	}
+	
+	CapturedHider = nullptr; 
+}
+
+void AFDTaggerCharacter::ForceOut() // 아웃 누르면 호출될 함수
+{
+	if (!CapturedHider) return; // 판정 중인 게 없으면 무시
+	
+	Internal_ResolveCaptureLocally(true);
+}
+
+void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
+{
+	if (!CapturedHider) return;
+
+	ACharacter* SparedHider = CapturedHider;
+	
+	// 봐주기 버프: 속도 증가 
+	if (UCharacterMovementComponent* Movement = SparedHider->GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeed = 1200.f;
+	}
+	// 무적처리 
+	
+	// 10초 뒤 버프 해제(대략 적음)
+	FTimerHandle SpareTimerHandle;
+	GetWorldTimerManager().SetTimer(SpareTimerHandle, [this, SparedHider]()
+	{
+		OnSpareExpired(SparedHider);
+	}, 10.f, false);
+	
+	Internal_ResolveCaptureLocally(false); // 봐줬으니까 capture은 false로
 }

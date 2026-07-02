@@ -42,6 +42,9 @@ public:
 	
 	virtual void BeginPlay() override;
 
+	void ForceOut();       // 아웃 선택시 호출되는 함수
+	void RequestSpare();   // 아웃 선택시 호출되는 함수
+	
 	// 공격 콜리전이 숨는 자와 Overlap됐을 때 서버에서 포획 판정 실행
 	UFUNCTION()
 	void OnCaptureCollisionOverlap(
@@ -91,4 +94,6 @@ private:
 
 	// 봐주기 무적·속도 버프 만료 처리 (서버 전용)
 	void OnSpareExpired(ACharacter* TargetHider);
+	
+	void Internal_ResolveCaptureLocally(bool bWasCaptured); // 공통 마무리 로직
 };
