@@ -5,6 +5,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "Blueprint/UserWidget.h"
 
 void AFDPlayerController::BeginPlay()
 {
@@ -54,7 +55,11 @@ void AFDPlayerController::SetupInputComponent()
 		EIC->BindAction(IA_Attack, ETriggerEvent::Started, this, &AFDPlayerController::Input_Attack);
 	}
 
-	// TODO: 봐주기 키 확정 후 IA_Spare 바인딩 추가
+	// 봐주기 키 입력 바인딩 (술래 전용)
+	if (IA_Spare)
+	{
+		EIC->BindAction(IA_Spare, ETriggerEvent::Started, this, &AFDPlayerController::Input_Spare);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -103,6 +108,13 @@ void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 	Tagger->Server_TryCapture();
 }
 
+void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
+{
+	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
+	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
+	Server_RequestSpare();
+}
+
 void AFDPlayerController::LockMovementForScouting()
 {
 	// 정찰 단계: 이동만 잠금, 카메라 회전은 허용
@@ -122,8 +134,44 @@ void AFDPlayerController::UnlockMovement()
 void AFDPlayerController::Client_ShowCapturePopup_Implementation()
 {
 	// 서버 → 술래 클라이언트: 포획 팝업 UI 활성화
-	// TODO: 위젯 블루프린트 연동 후 팝업 위젯 생성 및 뷰포트 추가
+	if (!CaptureWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[플레이어 컨트롤러] CaptureWidgetClass가 할당되지 않음"));
+		return;
+	}
+
+	// 이미 떠있는 팝업이 있으면 중복 생성 방지
+	if (CaptureWidgetInstance && CaptureWidgetInstance->IsInViewport())
+	{
+		return;
+	}
+
+	CaptureWidgetInstance = CreateWidget<UUserWidget>(this, CaptureWidgetClass);
+	if (!CaptureWidgetInstance) return;
+
+	CaptureWidgetInstance->AddToViewport();
+
+	// 팝업이 떠있는 동안 마우스 커서로 버튼 클릭 가능하게 처리
+	SetShowMouseCursor(true);
+	FInputModeUIOnly InputMode;
+	InputMode.SetWidgetToFocus(CaptureWidgetInstance->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
+
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 포획 팝업 UI 활성화"));
+}
+
+void AFDPlayerController::Client_HideCapturePopup_Implementation()
+{
+	if (CaptureWidgetInstance && CaptureWidgetInstance->IsInViewport())
+	{
+		CaptureWidgetInstance->RemoveFromParent();
+	}
+
+	SetShowMouseCursor(false);
+	SetInputMode(FInputModeGameOnly());
+
+	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 포획 팝업 UI 제거"));
 }
 
 void AFDPlayerController::Server_RequestOut_Implementation()
@@ -133,6 +181,7 @@ void AFDPlayerController::Server_RequestOut_Implementation()
 	if (!Tagger) return;
 
 	Tagger->ForceOut();
+	Client_HideCapturePopup();
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 술래가 아웃 선택"));
 }
 
@@ -149,6 +198,7 @@ void AFDPlayerController::Server_RequestSpare_Implementation()
 	if (!Tagger) return;
 
 	Tagger->RequestSpare();
+	Client_HideCapturePopup();
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 술래가 봐주기 선택"));
 }
 

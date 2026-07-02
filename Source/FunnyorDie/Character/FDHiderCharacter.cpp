@@ -18,6 +18,9 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 	// bIsDisguised를 모든 클라이언트에 복제 등록
 	DOREPLIFETIME(AFDHiderCharacter, bIsDisguised);
+
+	// bIsInvincible을 모든 클라이언트에 복제 등록
+	DOREPLIFETIME(AFDHiderCharacter, bIsInvincible);
 }
 
 bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
@@ -107,6 +110,25 @@ void AFDHiderCharacter::OnRep_bIsDisguised()
 	// Multicast로 이미 처리되므로 추가 비주얼 처리가 필요할 경우 여기에 작성
 	UE_LOG(LogTemp, Log, TEXT("[숨는자] 위장 상태 복제 수신 - 현재 위장 중: %s"),
 		bIsDisguised ? TEXT("true") : TEXT("false"));
+}
+
+void AFDHiderCharacter::SetInvincible(bool bNewInvincible)
+{
+	// 서버 권한으로만 상태 변경 (클라이언트가 직접 호출하면 안 됨)
+	if (!HasAuthority()) return;
+
+	bIsInvincible = bNewInvincible;
+
+	// 서버 자기 자신은 OnRep이 자동 호출되지 않으므로 수동 호출
+	OnRep_bIsInvincible();
+}
+
+void AFDHiderCharacter::OnRep_bIsInvincible()
+{
+	// 서버에서 bIsInvincible 복제 완료 시 클라이언트에서 자동 호출
+	// TODO: 무적 이펙트(파티클, 머티리얼 아웃라인 등) 켜고 끄는 비주얼 처리는 여기에 추가
+	UE_LOG(LogTemp, Log, TEXT("[숨는자] 무적 상태 변경 - 현재 무적: %s"),
+		bIsInvincible ? TEXT("true") : TEXT("false"));
 }
 
 void AFDHiderCharacter::Multicast_FreezeAnimation_Implementation(bool bFreeze)

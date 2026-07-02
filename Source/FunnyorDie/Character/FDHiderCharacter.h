@@ -41,6 +41,12 @@ public:
 	// 위장 상태 해제 요청 (클라이언트 → 서버)
 	UFUNCTION(Server, Reliable)
 	void Server_ExitDisguise();
+	
+	// 서버 전용: 무적 상태 설정 (봐주기 등 TaggerCharacter/GameMode에서 호출)
+	void SetInvincible(bool bNewInvincible);
+
+	// 현재 무적 여부 조회 ( bIsInvincible이 복제되므로 클라이언트/서버 모두 사용 가능)
+	bool IsInvincible() const { return bIsInvincible; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -49,9 +55,17 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_bIsDisguised)
 	bool bIsDisguised = false;
 
+	// 봐주기 등으로 인한 무적 상태, 서버에서 변경 시 클라이언트에 자동 전파
+	UPROPERTY(ReplicatedUsing = OnRep_bIsInvincible)
+	bool bIsInvincible = false;
+	
 	// bIsDisguised 복제 시 클라이언트에서 호출되는 콜백
 	UFUNCTION()
 	void OnRep_bIsDisguised();
+	
+	// bIsInvincible 복제 시 클라이언트에서 호출되는 콜백
+	UFUNCTION()
+	void OnRep_bIsInvincible();
 
 	// 위장 진입 시 애님 재생 속도 0으로 고정 (모든 클라이언트에 동기화)
 	UFUNCTION(NetMulticast, Reliable)

@@ -56,8 +56,17 @@ void AFDTaggerCharacter::OnCaptureCollisionOverlap(
 	// 이미 포획 판정 진행 중이면 중복 실행 방지
 	if (CapturedHider) return;
 
-	ACharacter* HiderCharacter = Cast<ACharacter>(OtherActor);
+	// ACharacter가 아니라 AFDHiderCharacter로 좁혀서 캐스팅
+	// (술래나 다른 액터가 콜리전에 들어와도 포획 판정 대상이 안 되도록)
+	AFDHiderCharacter* HiderCharacter = Cast<AFDHiderCharacter>(OtherActor);
 	if (!HiderCharacter) return;
+	
+	// 봐주기로 무적 상태인 하이더는 포획 판정 자체를 시작하지 않음
+	if (HiderCharacter->IsInvincible())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[술래] 무적 상태인 하이더라 포획 판정 스킵"));
+		return;
+	}
 	
 	// 판정은 GameMode에서 하도록 
 	if (AFDGameMode* FDGameMode = GetWorld()->GetAuthGameMode<AFDGameMode>())
@@ -169,6 +178,8 @@ void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
 		Movement->MaxWalkSpeed = 600.f;
 	}
 
+	GetWorldTimerManager().ClearTimer(SpareExpireTimerHandle);
+	
 	UE_LOG(LogTemp, Log, TEXT("[술래] 봐주기 만료 - 속도·무적 복구: %s"),
 		*TargetHider->GetName());
 }
@@ -183,6 +194,12 @@ void AFDTaggerCharacter::Internal_ResolveCaptureLocally(bool bWasCaptured)
 	if (APlayerController* TaggerPC = Cast<APlayerController>(GetController()))
 	{
 		TaggerPC->EnableInput(TaggerPC);
+		
+		// 팝업이 떠 있는 상태(타임아웃 케이스)라도 확실히 닫아줌
+		if (AFDPlayerController* FDTaggerPC = Cast<AFDPlayerController>(TaggerPC))
+		{
+			FDTaggerPC->Client_HideCapturePopup();
+		}
 	}
 	if (APlayerController* HiderPC = Cast<APlayerController>(CapturedHider->GetController()))
 	{
@@ -216,7 +233,12 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 	{
 		Movement->MaxWalkSpeed = 1200.f;
 	}
-	// 무적처리 
+	
+	// 무적 처리
+	if (AFDHiderCharacter* HiderChar = Cast<AFDHiderCharacter>(SparedHider))
+	{
+		HiderChar->SetInvincible(true);
+	}
 	
 	// 10초 뒤 버프 해제(대략 적음)
 	FTimerHandle SpareTimerHandle;
