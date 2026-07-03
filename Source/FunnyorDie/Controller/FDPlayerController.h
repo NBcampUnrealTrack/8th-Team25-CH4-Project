@@ -8,7 +8,7 @@
 
 class UInputMappingContext;
 class UInputAction;
-class UUserWidget;
+class UFDCapturePopupWidget;
 
 UCLASS()
 class FUNNYORDIE_API AFDPlayerController : public APlayerController
@@ -67,13 +67,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Spare;
 	
-	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당)
+	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당) -> 부모클래스 변경
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UUserWidget> CaptureWidgetClass;
+	TSubclassOf<class UFDCapturePopupWidget> CaptureWidgetClass;
 	
-	// 현재 뷰포트에 떠있는 포획 팝업 위젯 인스턴스
+	// 현재 뷰포트에 떠있는 포획 팝업 위젯 인스턴스 -> 마찬가지
 	UPROPERTY()
-	UUserWidget* CaptureWidgetInstance;
+	class UFDCapturePopupWidget* CaptureWidgetInstance;
 	
 	// 마우스 좌클릭 → 서버에 공격 요청
 	void Input_Attack(const FInputActionValue& Value);

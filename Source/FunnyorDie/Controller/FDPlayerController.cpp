@@ -6,6 +6,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/FDCapturePopupWidget.h"
 
 void AFDPlayerController::BeginPlay()
 {
@@ -146,7 +147,7 @@ void AFDPlayerController::Client_ShowCapturePopup_Implementation()
 		return;
 	}
 
-	CaptureWidgetInstance = CreateWidget<UUserWidget>(this, CaptureWidgetClass);
+	CaptureWidgetInstance = CreateWidget<UFDCapturePopupWidget>(this, CaptureWidgetClass);
 	if (!CaptureWidgetInstance) return;
 
 	CaptureWidgetInstance->AddToViewport();
