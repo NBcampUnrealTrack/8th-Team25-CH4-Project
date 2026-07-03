@@ -16,11 +16,6 @@ class FUNNYORDIE_API AFDPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	// 정찰 단계 시작 시 이동 잠금 (서버에서 호출)
-	void LockMovementForScouting();
-
-	// 본 게임 시작 시 이동 잠금 해제 (서버에서 호출)
-	void UnlockMovement();
 
 	// 서버 → 술래 클라이언트: 포획 팝업 UI 활성화
 	UFUNCTION(Client, Reliable)
@@ -37,6 +32,12 @@ public:
 	// 술래 → 서버: 봐주기 요청
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestSpare();
+	
+	UFUNCTION(Client, Reliable) // 이동 잠금 RPC
+	void Client_LockMovement();
+
+	UFUNCTION(Client, Reliable) // 이동 잠금 해제 RPC (아직 쓰이는 곳은 없음)
+	void Client_UnlockMovement();
 
 protected:
 	virtual void BeginPlay() override;

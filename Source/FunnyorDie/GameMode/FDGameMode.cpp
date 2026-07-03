@@ -172,7 +172,7 @@ void AFDGameMode::EndMatch() // 게임 끝
 	{
 		if (AFDPlayerController* FDPC = Cast<AFDPlayerController>(PS->GetOwningController()))
 		{
-			FDPC->LockMovementForScouting();
+			FDPC->Client_LockMovement();   // RPC로
 		}
 	}
 

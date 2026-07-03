@@ -8,6 +8,19 @@
 #include "Blueprint/UserWidget.h"
 #include "UI/FDCapturePopupWidget.h"
 
+void AFDPlayerController::Client_LockMovement_Implementation()
+{
+	SetIgnoreMoveInput(true);
+	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 (클라이언트)"));
+
+}
+
+void AFDPlayerController::Client_UnlockMovement_Implementation()
+{
+	SetIgnoreMoveInput(false);
+	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제 (클라이언트)"));
+}
+
 void AFDPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -114,22 +127,6 @@ void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
 	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
 	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
 	Server_RequestSpare();
-}
-
-void AFDPlayerController::LockMovementForScouting()
-{
-	// 정찰 단계: 이동만 잠금, 카메라 회전은 허용
-	SetIgnoreMoveInput(true);
-
-	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 정찰 단계 이동 잠금"));
-}
-
-void AFDPlayerController::UnlockMovement()
-{
-	// 본 게임 시작: 이동 잠금 해제
-	SetIgnoreMoveInput(false);
-
-	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제"));
 }
 
 void AFDPlayerController::Client_ShowCapturePopup_Implementation()
