@@ -7,6 +7,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameState/FDGameState.h"
 #include "Character/FDTaggerCharacter.h"
+#include "Controller/FDPlayerController.h"
 
 AFDGameMode::AFDGameMode()
 {
@@ -155,6 +156,30 @@ void AFDGameMode::StartInGame() // 본게임 시작
 
 void AFDGameMode::EndMatch() // 게임 끝
 {
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	// AliveHiderCount로 승패 판별
+	// 0이면 술래 승, 0보다 크면 시간 종료(하이더 승)
+	FDGameState->Winner = (FDGameState->AliveHiderCount <= 0)
+		? EMatchWinner::Tagger 
+		: EMatchWinner::Hider;
+
+	FDGameState->CurrentPhase = EMatchPhase::GameOver;
+	
+	// 게임 끝났으니 모든 플레이어 이동 잠금 (카메라는 허용)
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		if (AFDPlayerController* FDPC = Cast<AFDPlayerController>(PS->GetOwningController()))
+		{
+			FDPC->LockMovementForScouting();
+		}
+	}
+
+	GetWorldTimerManager().ClearTimer(PhaseTimerHandle);
+
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 게임 종료 - 승자: %s"),
+		FDGameState->Winner == EMatchWinner::Tagger ? TEXT("Tagger") : TEXT("Hider"));
 }
 
 void AFDGameMode::RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter)
@@ -177,6 +202,15 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
+	// 잡힌 하이더 본인의 PlayerState에 기록
+	if (APlayerState* HiderPS = HiderCharacter->GetPlayerState())
+	{
+		if (AFDPlayerState* FDHiderPS = Cast<AFDPlayerState>(HiderPS))
+		{
+			FDHiderPS->bIsAlive = false;
+		}
+	}
+	
 	--FDGameState->AliveHiderCount;
 	
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 포획 확정 - 생존 하이더 %d명 남음"), FDGameState->AliveHiderCount);

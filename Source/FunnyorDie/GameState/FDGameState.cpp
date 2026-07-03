@@ -10,6 +10,7 @@ void AFDGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	
 	DOREPLIFETIME(AFDGameState, CurrentPhase);
 	DOREPLIFETIME(AFDGameState, AliveHiderCount);
+	DOREPLIFETIME(AFDGameState, Winner);
 }
 
 void AFDGameState::OnRep_CurrentPhase()
