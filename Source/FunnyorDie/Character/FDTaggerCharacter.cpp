@@ -112,7 +112,7 @@ void AFDTaggerCharacter::StartCaptureSequence(ACharacter* TargetHider)
 void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
 {
 	// 밸런스 데이터 테이블에서 포획 대기 시간 조회
-	float JudgeTime = 3.f;
+	float JudgeTime = 15.f;
 	if (BalanceDataTable)
 	{
 		if (const FMatchBalanceSettings* Settings =
@@ -154,15 +154,13 @@ void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
 		*TargetHider->GetName(), JudgeTime);
 }
 
-void AFDTaggerCharacter::OnCaptureTimerExpired()
+void AFDTaggerCharacter::OnCaptureTimerExpired() 
+// 타이머 만료 = 술래가 선택하지 않음 → 자동 아웃 처리
+
 {
-	// 타이머 만료 = 술래가 선택하지 않음 → 자동 아웃 처리
 	if (!CapturedHider) return;
 
 	Internal_ResolveCaptureLocally(true);
-
-	UE_LOG(LogTemp, Log, TEXT("[술래] 포획 판정 타이머 만료 - 자동 아웃 처리: %s"),
-		*CapturedHider->GetName());
 }
 
 void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
@@ -170,8 +168,12 @@ void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
 	// 봐주기 무적·속도 버프 만료 시 원래 상태로 복구
 	if (!TargetHider) return;
 
-	// TODO: bIsInvincible = false 처리 (HiderCharacter 연동)
-
+	if (AFDHiderCharacter* HiderChar = Cast<AFDHiderCharacter>(TargetHider))
+		// 무적 끔 (RequestSpare에 구현해놓으신 거 반대로 설정)
+	{
+		HiderChar->SetInvincible(false); 
+	}
+	
 	// 이동 속도 원래대로 복구
 	if (UCharacterMovementComponent* Movement = TargetHider->GetCharacterMovement())
 	{
@@ -241,11 +243,11 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 	}
 	
 	// 10초 뒤 버프 해제(대략 적음)
-	FTimerHandle SpareTimerHandle;
-	GetWorldTimerManager().SetTimer(SpareTimerHandle, [this, SparedHider]()
+	GetWorldTimerManager().SetTimer(SpareExpireTimerHandle, [this, SparedHider]()
 	{
 		OnSpareExpired(SparedHider);
-	}, 10.f, false);
+	}, 
+	10.f, false);
 	
 	Internal_ResolveCaptureLocally(false); // 봐줬으니까 capture은 false로
 }

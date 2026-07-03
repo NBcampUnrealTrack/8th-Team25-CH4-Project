@@ -80,7 +80,7 @@ private:
 	UPROPERTY()
 	ACharacter* CapturedHider;
 
-	// 포획 판정 대기 타이머 (3초 후 자동 아웃)
+	// 포획 판정 대기 타이머 (3초 후 자동 아웃) -> 15초 변경
 	FTimerHandle CaptureJudgeTimerHandle;
 
 	// 봐주기 무적 해제 타이머 (7초 후 속도·무적 복구)
