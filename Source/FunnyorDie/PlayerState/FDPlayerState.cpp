@@ -24,6 +24,5 @@ void AFDPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	
 	DOREPLIFETIME(AFDPlayerState, RoleTag);
 	DOREPLIFETIME(AFDPlayerState, bIsAlive);
-	DOREPLIFETIME(AFDPlayerState, bIsInvincible);
 	DOREPLIFETIME(AFDPlayerState, bIsHost);
 }

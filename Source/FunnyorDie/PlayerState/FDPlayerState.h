@@ -19,9 +19,6 @@ public:
 
 	UPROPERTY(Replicated, BlueprintReadOnly)
 	bool bIsAlive = true; // 생존여부
-
-	UPROPERTY(Replicated, BlueprintReadOnly)
-	bool bIsInvincible = false; // 무적여부 (봐주기 버프)
 	
 	UPROPERTY(Replicated, BlueprintReadOnly)
 	bool bIsHost = false; // 방장 여부 - 로비에서만 의미 있음 Server에서만 true로 세팅됨(lobbygamemode)

@@ -82,13 +82,14 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Movement) return;
 	
+	// DataTable
 	if (bEnable)
 	{
-		Movement->MaxWalkSpeed = 1200.f;
+		Movement->MaxWalkSpeed = 1200.f; // 정찰모드시 술래 속도 증가시키는 거예요
 	}
 	else
 	{
-		Movement->MaxWalkSpeed = 600.0f;
+		Movement->MaxWalkSpeed = 600.0f; // 아니면 원래대로 
 	}
 	
 	Multicast_SetMeshVisibility(!bEnable);
