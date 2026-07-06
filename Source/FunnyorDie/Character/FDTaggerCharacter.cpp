@@ -81,15 +81,27 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 {
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Movement) return;
-	
-	// DataTable
+
+	// 밸런스 테이블에서 속도 값 조회
+	float ScoutSpeed = 1200.f;
+	float NormalSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("정찰 속도 조회")))
+		{
+			ScoutSpeed = Settings->TaggerScoutSpeed;
+			NormalSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
+
 	if (bEnable)
 	{
-		Movement->MaxWalkSpeed = 1200.f; // 정찰모드시 술래 속도 증가시키는 거예요
+		Movement->MaxWalkSpeed = ScoutSpeed; // 정찰모드시 술래 속도 증가
 	}
 	else
 	{
-		Movement->MaxWalkSpeed = 600.0f; // 아니면 원래대로 
+		Movement->MaxWalkSpeed = NormalSpeed; // 아니면 원래대로 
 	}
 	
 	Multicast_SetMeshVisibility(!bEnable);
@@ -176,9 +188,18 @@ void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
 	}
 	
 	// 이동 속도 원래대로 복구
+	float DefaultSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("기본 속도 조회")))
+		{
+			DefaultSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
 	if (UCharacterMovementComponent* Movement = TargetHider->GetCharacterMovement())
 	{
-		Movement->MaxWalkSpeed = 600.f;
+		Movement->MaxWalkSpeed = DefaultSpeed;
 	}
 
 	GetWorldTimerManager().ClearTimer(SpareExpireTimerHandle);
@@ -245,9 +266,18 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 	}
 
 	// 봐주기 버프: 속도 증가 (기본 속도 * 배율)
+	float DefaultSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("기본 속도 조회")))
+		{
+			DefaultSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
 	if (UCharacterMovementComponent* Movement = SparedHider->GetCharacterMovement())
 	{
-		Movement->MaxWalkSpeed = 600.f * SpeedMultiplier;
+		Movement->MaxWalkSpeed = DefaultSpeed * SpeedMultiplier;
 	}
 
 	// 무적 처리

@@ -76,6 +76,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
 	float SpareSpeedMultiplier;
 
+	// 포획 판정 콜리전 반지름 - 기본 80
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float CaptureRadius;
+
+	// 캐릭터 기본 이동속도 - 기본 600
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float DefaultWalkSpeed;
+
+	// 술래 정찰(관전) 모드 이동속도 - 기본 1200
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float TaggerScoutSpeed;
+
 	// 기본값 설정 (생성자)
 	FMatchBalanceSettings()
 		: ScoutPhaseTime(60.0f)
@@ -83,6 +95,9 @@ public:
 		, CaptureJudgeWaitTime(15.0f)
 		, SpareInvincibleTime(7.0f)
 		, SpareSpeedMultiplier(1.5f)
+		, CaptureRadius(80.0f)
+		, DefaultWalkSpeed(600.0f)
+		, TaggerScoutSpeed(1200.0f)
 	{
 	}
 };
