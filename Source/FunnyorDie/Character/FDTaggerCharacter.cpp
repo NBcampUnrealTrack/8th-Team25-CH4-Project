@@ -118,7 +118,7 @@ void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
 		if (const FMatchBalanceSettings* Settings =
 			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("포획 판정 대기 시간 조회")))
 		{
-			JudgeTime = Settings->CaptureJudgeTime;
+			JudgeTime = Settings->CaptureJudgeWaitTime;
 		}
 	}
 
@@ -229,25 +229,38 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 	if (!CapturedHider) return;
 
 	ACharacter* SparedHider = CapturedHider;
-	
-	// 봐주기 버프: 속도 증가 
+
+	// 밸런스 테이블에서 무적 지속 시간 / 속도 배율 조회
+	float InvincibleTime = 7.f;
+	float SpeedMultiplier = 1.5f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("봐주기 설정 조회")))
+		{
+			InvincibleTime = Settings->SpareInvincibleTime;
+			SpeedMultiplier = Settings->SpareSpeedMultiplier;
+		}
+	}
+
+	// 봐주기 버프: 속도 증가 (기본 속도 * 배율)
 	if (UCharacterMovementComponent* Movement = SparedHider->GetCharacterMovement())
 	{
-		Movement->MaxWalkSpeed = 1200.f;
+		Movement->MaxWalkSpeed = 600.f * SpeedMultiplier;
 	}
-	
+
 	// 무적 처리
 	if (AFDHiderCharacter* HiderChar = Cast<AFDHiderCharacter>(SparedHider))
 	{
 		HiderChar->SetInvincible(true);
 	}
-	
-	// 10초 뒤 버프 해제(대략 적음)
+
+	// 테이블에서 가져온 시간 뒤 버프 해제
 	GetWorldTimerManager().SetTimer(SpareExpireTimerHandle, [this, SparedHider]()
-	{
-		OnSpareExpired(SparedHider);
-	}, 
-	10.f, false);
-	
-	Internal_ResolveCaptureLocally(false); // 봐줬으니까 capture은 false로
+		{
+			OnSpareExpired(SparedHider);
+		},
+		InvincibleTime, false);
+
+	Internal_ResolveCaptureLocally(false);
 }

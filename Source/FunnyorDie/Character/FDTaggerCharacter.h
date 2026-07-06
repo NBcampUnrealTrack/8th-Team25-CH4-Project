@@ -4,29 +4,13 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "GameDataTypes.h" 
 #include "FDTaggerCharacter.generated.h"
 
 // 밸런스 데이터 테이블 행 구조체 (FMatchBalanceSettings)
 // 포획 대기 시간, 무적 시간, 속도 배율 등 수치 조정용
-// 상황보고 따로 빼서 관리할 수 도 있음
-USTRUCT(BlueprintType)
-struct FMatchBalanceSettings : public FTableRowBase
-{
-	GENERATED_BODY()
+// 상황보고 따로 빼서 관리할 수 도 있음 --> GameDataTypes.h로 이동
 
-public:
-	// 포획 판정 대기 시간 (기본값 15초, 이 시간 안에 술래가 선택 안 하면 자동 아웃)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float CaptureJudgeTime = 15.f;
-
-	// 봐주기 무적 지속 시간 (기본값 7초)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float SpareInvincibleTime = 7.f;
-
-	// 봐주기 후 숨는 자 이동 속도 배율 (기본값 1.5배)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float SpareSpeedMultiplier = 1.5f;
-};
 
 UCLASS()
 class FUNNYORDIE_API AFDTaggerCharacter : public ACharacter
