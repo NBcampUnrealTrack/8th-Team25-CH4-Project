@@ -60,11 +60,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
 	float ScoutPhaseTime;
 
-	// 본게임 제한 시간 - 기본 300초 (5분)
+	// 본게임 제한 시간 - 기본 300초 (5분) 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
 	float MainGameTimeLimit;
 
-	// 포획 판정 대기 시간 - 기본 3초
+	// 포획 판정 대기 시간 - 기본 15초
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
 	float CaptureJudgeWaitTime;
 

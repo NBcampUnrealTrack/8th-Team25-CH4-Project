@@ -111,8 +111,8 @@ void AFDGameMode::StartScouting() // 정찰 모드
 			TaggerChar->SetScoutingMode(true); // 캐릭터 쪽에 구현해놓은 술래 정찰모드 켜기
 		}
 	}
-
-	// 60초 후 본게임 시작 -> 디버깅동안은 20초로 변경
+	
+	// DataTable -> ScoutPhaseTime
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, 20.f, false);
 }
 
@@ -150,7 +150,7 @@ void AFDGameMode::StartInGame() // 본게임 시작
 	}
 	FDGameState->AliveHiderCount = HiderCount; // 그걸 GameState의 replication 되는 alivehidercount에 넣음
 	
-	// 300초 후 게임 종료
+	// DataTable -> MainGameTimeLimit
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::EndMatch, 300.f, false);
 }
 
