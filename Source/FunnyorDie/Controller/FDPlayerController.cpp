@@ -7,6 +7,8 @@
 #include "InputActionValue.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/FDCapturePopupWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "Customization/FDCustomizationComponent.h"
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -19,6 +21,36 @@ void AFDPlayerController::Client_UnlockMovement_Implementation()
 {
 	SetIgnoreMoveInput(false);
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제 (클라이언트)"));
+}
+
+void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!Subsystem) return;
+
+	if (bEnable)
+	{
+		if (DefaultMappingContext)
+		{
+			Subsystem->RemoveMappingContext(DefaultMappingContext);
+		}
+		if (CustomizationMappingContext)
+		{
+			Subsystem->AddMappingContext(CustomizationMappingContext, 0);
+		}
+	}
+	else
+	{
+		if (CustomizationMappingContext)
+		{
+			Subsystem->RemoveMappingContext(CustomizationMappingContext);
+		}
+		if (DefaultMappingContext)
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
 }
 
 void AFDPlayerController::BeginPlay()
@@ -74,6 +106,14 @@ void AFDPlayerController::SetupInputComponent()
 	{
 		EIC->BindAction(IA_Spare, ETriggerEvent::Started, this, &AFDPlayerController::Input_Spare);
 	}
+
+	// 페인팅 입력 바인딩 - Started(스트로크 시작) / Triggered(드래그 중) / Completed(뗌)
+	if (IA_Paint)
+	{
+		EIC->BindAction(IA_Paint, ETriggerEvent::Started, this, &AFDPlayerController::Input_PaintStart);
+		EIC->BindAction(IA_Paint, ETriggerEvent::Triggered, this, &AFDPlayerController::Input_PaintOngoing);
+		EIC->BindAction(IA_Paint, ETriggerEvent::Completed, this, &AFDPlayerController::Input_PaintEnd);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -127,6 +167,52 @@ void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
 	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
 	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
 	Server_RequestSpare();
+}
+
+void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)
+{
+	TryPaintAtCursor(true, false);
+}
+
+void AFDPlayerController::Input_PaintOngoing(const FInputActionValue& Value)
+{
+	TryPaintAtCursor(false, false);
+}
+
+void AFDPlayerController::Input_PaintEnd(const FInputActionValue& Value)
+{
+	TryPaintAtCursor(false, true);
+}
+
+void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
+{
+	ACharacter* MyCharacter = Cast<ACharacter>(GetPawn());
+	if (!MyCharacter) return;
+
+	// 커스터마이징 화면(캐릭터를 정면으로 비추고 마우스로 칠하는 상황)을 가정한 트레이스
+	// 인게임 필드에서 그대로 쓰면 카메라 각도상 자기 캐릭터가 커서 아래 잘 안 잡힐 수 있어서
+	// 전용 커스터마이징 카메라/뷰로 전환한 상태에서 호출하는 걸 권장
+	FHitResult Hit;
+	GetHitResultUnderCursor(ECC_Visibility, true, Hit);
+
+	if (!Hit.bBlockingHit || Hit.GetActor() != MyCharacter)
+	{
+		return; // 자기 캐릭터가 아닌 곳을 클릭했으면 무시 (남의 캐릭터에 낙서 못 하게)
+	}
+
+	FVector2D UV;
+	// ※ 확인 필요: 프로젝트 세팅(Project Settings -> Physics)에서
+	// "Support UV From Hit Results" 옵션을 켜야 하고, 메시 콜리전이 Complex Collision을 사용해야
+	// FindCollisionUV가 정상적으로 UV를 반환함. 꺼져 있으면 항상 실패함.
+	if (!UGameplayStatics::FindCollisionUV(Hit, 0, UV))
+	{
+		return;
+	}
+
+	if (UFDCustomizationComponent* CustomComp = MyCharacter->FindComponentByClass<UFDCustomizationComponent>())
+	{
+		CustomComp->RequestLocalPaint(UV, bStrokeStart, bStrokeEnd);
+	}
 }
 
 void AFDPlayerController::Client_ShowCapturePopup_Implementation()

@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
+#include "Customization/FDCustomizationComponent.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -17,6 +18,9 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 	CaptureCollision->SetSphereRadius(80.f);
 	// 기본적으로 비활성화, 공격 입력 시에만 활성화
 	CaptureCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// 채색 컴포넌트 생성 - Hider 쪽 생성자에도 동일하게 추가되어 있음
+	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
 }
 
 void AFDTaggerCharacter::BeginPlay()

@@ -79,6 +79,11 @@ protected:
 	// Overlap 됐을 때 호출될 함수
 	void OnCaptureOverlap();
 
+	// 채색(커스터마이징) 공용 컴포넌트 - Tagger 쪽에도 동일하게 부착됨
+	// PlayerState의 색상/페인트 스냅샷을 실제 메시에 적용하는 실행부 역할
+	UPROPERTY(VisibleAnywhere, Category = "Customization")
+	class UFDCustomizationComponent* CustomizationComp;
+
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Disguise")
