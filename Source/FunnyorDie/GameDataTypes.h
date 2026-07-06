@@ -80,7 +80,7 @@ public:
 	FMatchBalanceSettings()
 		: ScoutPhaseTime(60.0f)
 		, MainGameTimeLimit(300.0f)
-		, CaptureJudgeWaitTime(3.0f)
+		, CaptureJudgeWaitTime(15.0f)
 		, SpareInvincibleTime(7.0f)
 		, SpareSpeedMultiplier(1.5f)
 	{
