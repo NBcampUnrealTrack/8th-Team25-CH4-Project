@@ -7,9 +7,13 @@
 #include "Net/UnrealNetwork.h"
 #include "GameState/FDGameState.h"
 #include "PlayerState/FDPlayerState.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Customization/FDCustomizationComponent.h"
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
+	// 채색 컴포넌트 생성 - Tagger 쪽 생성자에도 동일하게 추가되어 있음
+	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
 }
 
 void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -23,26 +27,25 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AFDHiderCharacter, bIsInvincible);
 }
 
-bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
-	const FVector& SrcLocation) const
+bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
 {
+	// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
 	if (const AController* ViewerController = Cast<AController>(RealViewer))
-		// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
 	{
 		if (const AFDPlayerState* FDViewerPS = ViewerController->GetPlayerState<AFDPlayerState>())
 		{
 			if (const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>())
 			{
+				// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
 				if (FDGameState->CurrentPhase == EMatchPhase::Scouting &&
-					FDViewerPS->RoleTag == EFDRole::Tagger) 
-					// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
+					FDViewerPS->RoleTag == EFDRole::Tagger)
 				{
 					return false;
 				}
 			}
 		}
 	}
-	
+
 	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
 }
 
@@ -56,6 +59,15 @@ void AFDHiderCharacter::BeginPlay()
 		OriginalCapsuleRadius = Capsule->GetUnscaledCapsuleRadius();
 		OriginalCapsuleHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
 	}
+
+	// 기본 이동속도 저장 (무르기 속도 버프 해제 시 복구에 사용)
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		DefaultWalkSpeed = MoveComp->MaxWalkSpeed;
+	}
+
+	// CustomizationComp->BeginPlay()는 컴포넌트 자체 라이프사이클에서 자동 호출되니까
+	// 여기서 따로 호출할 필요 없음 (컴포넌트가 자기 BeginPlay에서 PlayerState 데이터를 읽어감)
 }
 
 void AFDHiderCharacter::Server_EnterDisguise_Implementation(FName DisguiseRowName)
@@ -121,6 +133,34 @@ void AFDHiderCharacter::SetInvincible(bool bNewInvincible)
 
 	// 서버 자기 자신은 OnRep이 자동 호출되지 않으므로 수동 호출
 	OnRep_bIsInvincible();
+
+	// 이동속도 컴포넌트 가져오기
+	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+	if (!MoveComp) return;
+
+	if (bNewInvincible)
+	{
+		// 무적 시작: 데이터 테이블에서 배율을 가져와 기본 속도에 곱해서 적용
+		float SpeedMultiplier = 1.5f; // 데이터 테이블 조회 실패 시 사용할 기본값
+
+		if (const FMatchBalanceSettings* Settings = GetBalanceSettings())
+		{
+			SpeedMultiplier = Settings->SpareSpeedMultiplier;
+		}
+
+		MoveComp->MaxWalkSpeed = DefaultWalkSpeed * SpeedMultiplier;
+
+		UE_LOG(LogTemp, Log, TEXT("[숨는자] 무르기 속도 버프 적용 - 배율: %.2f, 최종 속도: %.1f"),
+			SpeedMultiplier, MoveComp->MaxWalkSpeed);
+	}
+	else
+	{
+		// 무적 종료: 원래 속도로 복구
+		MoveComp->MaxWalkSpeed = DefaultWalkSpeed;
+
+		UE_LOG(LogTemp, Log, TEXT("[숨는자] 무르기 속도 버프 해제 - 원래 속도로 복구: %.1f"),
+			DefaultWalkSpeed);
+	}
 }
 
 void AFDHiderCharacter::OnRep_bIsInvincible()
@@ -162,4 +202,17 @@ void AFDHiderCharacter::Multicast_ResizeCapsule_Implementation(float NewRadius, 
 void AFDHiderCharacter::OnCaptureOverlap()
 {
 	// 술래가 포획 범위 내에 들어왔을 때 처리
+}
+
+const FMatchBalanceSettings* AFDHiderCharacter::GetBalanceSettings() const
+{
+	if (!BalanceDataTable)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[숨는자] 밸런스 데이터 테이블이 할당되지 않음"));
+		return nullptr;
+	}
+
+	return BalanceDataTable->FindRow<FMatchBalanceSettings>(
+		TEXT("Default"), TEXT("밸런스 설정 조회")
+	);
 }

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Engine/DataTable.h"
+#include "GameDataTypes.h"  
 #include "FDHiderCharacter.generated.h"
 
 // 위장 사물의 크기 정보를 데이터 테이블로 관리하기 위한 행 구조체
@@ -78,12 +79,27 @@ protected:
 	// Overlap 됐을 때 호출될 함수
 	void OnCaptureOverlap();
 
+	// 채색(커스터마이징) 공용 컴포넌트 - Tagger 쪽에도 동일하게 부착됨
+	// PlayerState의 색상/페인트 스냅샷을 실제 메시에 적용하는 실행부 역할
+	UPROPERTY(VisibleAnywhere, Category = "Customization")
+	class UFDCustomizationComponent* CustomizationComp;
+
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Disguise")
 	UDataTable* DisguiseDataTable;
 
+	// 밸런스 수치 데이터 테이블 (에디터에서 DT_MatchBalanceSettings 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Balance")
+	UDataTable* BalanceDataTable;
+
 	// 위장 해제 전 원래 캡슐 크기 저장용
 	float OriginalCapsuleRadius = 34.f;
 	float OriginalCapsuleHalfHeight = 88.f;
+
+	// 무적/속도버프 전 원래 걷기 속도 저장용 (BeginPlay에서 자동 저장됨)
+	float DefaultWalkSpeed = 600.f;
+
+	// 데이터 테이블에서 밸런스 설정값을 가져오는 헬퍼 함수
+	const FMatchBalanceSettings* GetBalanceSettings() const;
 };

@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
+#include "Customization/FDCustomizationComponent.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -17,6 +18,9 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 	CaptureCollision->SetSphereRadius(80.f);
 	// 기본적으로 비활성화, 공격 입력 시에만 활성화
 	CaptureCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// 채색 컴포넌트 생성 - Hider 쪽 생성자에도 동일하게 추가되어 있음
+	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
 }
 
 void AFDTaggerCharacter::BeginPlay()
@@ -81,14 +85,27 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 {
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Movement) return;
-	
+
+	// 밸런스 테이블에서 속도 값 조회
+	float ScoutSpeed = 1200.f;
+	float NormalSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("정찰 속도 조회")))
+		{
+			ScoutSpeed = Settings->TaggerScoutSpeed;
+			NormalSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
+
 	if (bEnable)
 	{
-		Movement->MaxWalkSpeed = 1200.f;
+		Movement->MaxWalkSpeed = ScoutSpeed; // 정찰모드시 술래 속도 증가
 	}
 	else
 	{
-		Movement->MaxWalkSpeed = 600.0f;
+		Movement->MaxWalkSpeed = NormalSpeed; // 아니면 원래대로 
 	}
 	
 	Multicast_SetMeshVisibility(!bEnable);
@@ -118,7 +135,7 @@ void AFDTaggerCharacter::Internal_StartCaptureSequence(ACharacter* TargetHider)
 		if (const FMatchBalanceSettings* Settings =
 			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("포획 판정 대기 시간 조회")))
 		{
-			JudgeTime = Settings->CaptureJudgeTime;
+			JudgeTime = Settings->CaptureJudgeWaitTime;
 		}
 	}
 
@@ -175,9 +192,18 @@ void AFDTaggerCharacter::OnSpareExpired(ACharacter* TargetHider)
 	}
 	
 	// 이동 속도 원래대로 복구
+	float DefaultSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("기본 속도 조회")))
+		{
+			DefaultSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
 	if (UCharacterMovementComponent* Movement = TargetHider->GetCharacterMovement())
 	{
-		Movement->MaxWalkSpeed = 600.f;
+		Movement->MaxWalkSpeed = DefaultSpeed;
 	}
 
 	GetWorldTimerManager().ClearTimer(SpareExpireTimerHandle);
@@ -229,25 +255,47 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 	if (!CapturedHider) return;
 
 	ACharacter* SparedHider = CapturedHider;
-	
-	// 봐주기 버프: 속도 증가 
+
+	// 밸런스 테이블에서 무적 지속 시간 / 속도 배율 조회
+	float InvincibleTime = 7.f;
+	float SpeedMultiplier = 1.5f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("봐주기 설정 조회")))
+		{
+			InvincibleTime = Settings->SpareInvincibleTime;
+			SpeedMultiplier = Settings->SpareSpeedMultiplier;
+		}
+	}
+
+	// 봐주기 버프: 속도 증가 (기본 속도 * 배율)
+	float DefaultSpeed = 600.f;
+	if (BalanceDataTable)
+	{
+		if (const FMatchBalanceSettings* Settings =
+			BalanceDataTable->FindRow<FMatchBalanceSettings>(TEXT("Default"), TEXT("기본 속도 조회")))
+		{
+			DefaultSpeed = Settings->DefaultWalkSpeed;
+		}
+	}
 	if (UCharacterMovementComponent* Movement = SparedHider->GetCharacterMovement())
 	{
-		Movement->MaxWalkSpeed = 1200.f;
+		Movement->MaxWalkSpeed = DefaultSpeed * SpeedMultiplier;
 	}
-	
+
 	// 무적 처리
 	if (AFDHiderCharacter* HiderChar = Cast<AFDHiderCharacter>(SparedHider))
 	{
 		HiderChar->SetInvincible(true);
 	}
-	
-	// 10초 뒤 버프 해제(대략 적음)
+
+	// 테이블에서 가져온 시간 뒤 버프 해제
 	GetWorldTimerManager().SetTimer(SpareExpireTimerHandle, [this, SparedHider]()
-	{
-		OnSpareExpired(SparedHider);
-	}, 
-	10.f, false);
-	
-	Internal_ResolveCaptureLocally(false); // 봐줬으니까 capture은 false로
+		{
+			OnSpareExpired(SparedHider);
+		},
+		InvincibleTime, false);
+
+	Internal_ResolveCaptureLocally(false);
 }
