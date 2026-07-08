@@ -1,9 +1,11 @@
-﻿// GameDataTypes.h
+// GameDataTypes.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "GameDataTypes.generated.h"
+
+class UAnimMontage; // FFDEmoteData::Montage 전방 선언
 
 /**
  * 사물(Prop) 속성 데이터 구조체
@@ -98,6 +100,38 @@ public:
 		, CaptureRadius(80.0f)
 		, DefaultWalkSpeed(600.0f)
 		, TaggerScoutSpeed(1200.0f)
+	{
+	}
+};
+
+/**
+ * 이모트(감정표현) 데이터 구조체
+ * UI 목록에 표시될 이모트 하나당 행 하나씩 - 애니메이터가 몽타주 채워넣으면 UI에 자동으로 뜨는 구조
+ */
+USTRUCT(BlueprintType)
+struct FFDEmoteData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// UI 버튼에 표시될 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	FText DisplayName;
+
+	// 실제 재생할 애니메이션 몽타주
+	// AnimBP에서 UpperBody(또는 그에 준하는) 슬롯으로 설정되어 있어야 이동 중에도 하체가 안 멈춤
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	UAnimMontage* Montage;
+
+	// UI 버튼 아이콘
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	UTexture2D* Icon;
+
+	// 기본값 설정 (생성자)
+	FFDEmoteData()
+		: DisplayName(FText::GetEmpty())
+		, Montage(nullptr)
+		, Icon(nullptr)
 	{
 	}
 };
