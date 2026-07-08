@@ -9,6 +9,7 @@
 class UInputMappingContext;
 class UInputAction;
 class UFDCapturePopupWidget;
+class UFDEmoteMenuWidget;
 
 UCLASS()
 class FUNNYORDIE_API AFDPlayerController : public APlayerController
@@ -38,8 +39,8 @@ public:
 
 	UFUNCTION(Client, Reliable) // 이동 잠금 해제 RPC (아직 쓰이는 곳은 없음)
 	void Client_UnlockMovement();
-	
-	// 커스터마이징 모드 진입/해제 시 매핑 컨텍스트 스위칭
+
+	// 페인팅 모드 진입/해제 시 매핑 컨텍스트 스위칭 (Default <-> Customization)
 	void SetCustomizationInputMode(bool bEnable);
 
 protected:
@@ -50,8 +51,8 @@ private:
 	// 인풋 매핑 컨텍스트 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputMappingContext* DefaultMappingContext;
-	
-	// 커스터마이징 모드 전용 매핑 컨텍스트 (에디터에서 IMC_Customization 할당)
+
+	// 페인팅 전용 매핑 컨텍스트 (에디터에서 할당) - 이동/카메라랑 겹치지 않게 분리
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputMappingContext* CustomizationMappingContext;
 
@@ -75,11 +76,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Spare;
 
-	// 채색(페인팅) 인풋 액션 - 마우스 좌클릭 드래그로 그림
-	// 커스터마이징 화면/모드에서만 활성화되는 별도 매핑 컨텍스트에 두는 걸 권장
-	// (일반 플레이 중 좌클릭은 IA_Attack이랑 겹치니까 매핑 컨텍스트를 분리해서 상황별로 스위칭해야 함)
+	// 채색(페인팅) 인풋 액션 - 마우스 좌클릭 드래그로 그림 (CustomizationMappingContext 전용)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Paint;
+
+	// 이모트 메뉴 토글 인풋 액션 (에디터에서 할당) - 이동 허용이라 기본 IMC에 그대로 포함
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	UInputAction* IA_EmoteMenu;
 	
 	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당) -> 부모클래스 변경
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -88,6 +91,17 @@ private:
 	// 현재 뷰포트에 떠있는 포획 팝업 위젯 인스턴스 -> 마찬가지
 	UPROPERTY()
 	class UFDCapturePopupWidget* CaptureWidgetInstance;
+
+	// 이모트 메뉴 위젯 블루프린트 클래스 (에디터에서 WBP_FDEmoteMenu 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UFDEmoteMenuWidget> EmoteMenuWidgetClass;
+
+	// 현재 뷰포트에 떠있는 이모트 메뉴 위젯 인스턴스
+	UPROPERTY()
+	UFDEmoteMenuWidget* EmoteMenuWidgetInstance;
+
+	// 이모트 메뉴 열림 여부 (토글용 플래그)
+	bool bEmoteMenuOpen = false;
 	
 	// 마우스 좌클릭 → 서버에 공격 요청
 	void Input_Attack(const FInputActionValue& Value);
@@ -111,4 +125,10 @@ private:
 
 	// 커서 아래를 트레이스해서 자기 캐릭터 메시 UV를 뽑아내고, 커스터마이징 컴포넌트에 페인팅 요청
 	void TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd);
+
+	// 이모트 메뉴 토글 입력 처리
+	void Input_ToggleEmoteMenu(const FInputActionValue& Value);
+
+	// 실제로 메뉴를 열고 닫는 함수 - 이동/카메라는 계속 허용되게 FInputModeGameAndUI 사용
+	void ToggleEmoteMenu(bool bOpen);
 };

@@ -9,6 +9,8 @@
 #include "UI/FDCapturePopupWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Customization/FDCustomizationComponent.h"
+#include "Emote/FDEmoteComponent.h"
+#include "Emote/FDEmoteMenuWidget.h"
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -21,36 +23,6 @@ void AFDPlayerController::Client_UnlockMovement_Implementation()
 {
 	SetIgnoreMoveInput(false);
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제 (클라이언트)"));
-}
-
-void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
-{
-	UEnhancedInputLocalPlayerSubsystem* Subsystem =
-		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-	if (!Subsystem) return;
-
-	if (bEnable)
-	{
-		if (DefaultMappingContext)
-		{
-			Subsystem->RemoveMappingContext(DefaultMappingContext);
-		}
-		if (CustomizationMappingContext)
-		{
-			Subsystem->AddMappingContext(CustomizationMappingContext, 0);
-		}
-	}
-	else
-	{
-		if (CustomizationMappingContext)
-		{
-			Subsystem->RemoveMappingContext(CustomizationMappingContext);
-		}
-		if (DefaultMappingContext)
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
-	}
 }
 
 void AFDPlayerController::BeginPlay()
@@ -113,6 +85,12 @@ void AFDPlayerController::SetupInputComponent()
 		EIC->BindAction(IA_Paint, ETriggerEvent::Started, this, &AFDPlayerController::Input_PaintStart);
 		EIC->BindAction(IA_Paint, ETriggerEvent::Triggered, this, &AFDPlayerController::Input_PaintOngoing);
 		EIC->BindAction(IA_Paint, ETriggerEvent::Completed, this, &AFDPlayerController::Input_PaintEnd);
+	}
+
+	// 이모트 메뉴 토글 바인딩 - 이동/카메라랑 안 겹치니 기본 IMC에 그대로 포함
+	if (IA_EmoteMenu)
+	{
+		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Started, this, &AFDPlayerController::Input_ToggleEmoteMenu);
 	}
 }
 
@@ -190,8 +168,6 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	if (!MyCharacter) return;
 
 	// 커스터마이징 화면(캐릭터를 정면으로 비추고 마우스로 칠하는 상황)을 가정한 트레이스
-	// 인게임 필드에서 그대로 쓰면 카메라 각도상 자기 캐릭터가 커서 아래 잘 안 잡힐 수 있어서
-	// 전용 커스터마이징 카메라/뷰로 전환한 상태에서 호출하는 걸 권장
 	FHitResult Hit;
 	GetHitResultUnderCursor(ECC_Visibility, true, Hit);
 
@@ -203,7 +179,7 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	FVector2D UV;
 	// ※ 확인 필요: 프로젝트 세팅(Project Settings -> Physics)에서
 	// "Support UV From Hit Results" 옵션을 켜야 하고, 메시 콜리전이 Complex Collision을 사용해야
-	// FindCollisionUV가 정상적으로 UV를 반환함. 꺼져 있으면 항상 실패함.
+	// FindCollisionUV가 정상적으로 UV를 반환함.
 	if (!UGameplayStatics::FindCollisionUV(Hit, 0, UV))
 	{
 		return;
@@ -213,6 +189,88 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	{
 		CustomComp->RequestLocalPaint(UV, bStrokeStart, bStrokeEnd);
 	}
+}
+
+void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!Subsystem) return;
+
+	if (bEnable)
+	{
+		if (DefaultMappingContext)
+		{
+			Subsystem->RemoveMappingContext(DefaultMappingContext);
+		}
+		if (CustomizationMappingContext)
+		{
+			Subsystem->AddMappingContext(CustomizationMappingContext, 0);
+		}
+	}
+	else
+	{
+		if (CustomizationMappingContext)
+		{
+			Subsystem->RemoveMappingContext(CustomizationMappingContext);
+		}
+		if (DefaultMappingContext)
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
+}
+
+void AFDPlayerController::Input_ToggleEmoteMenu(const FInputActionValue& Value)
+{
+	bEmoteMenuOpen = !bEmoteMenuOpen;
+	ToggleEmoteMenu(bEmoteMenuOpen);
+}
+
+void AFDPlayerController::ToggleEmoteMenu(bool bOpen)
+{
+	if (bOpen)
+	{
+		if (!EmoteMenuWidgetInstance && EmoteMenuWidgetClass)
+		{
+			EmoteMenuWidgetInstance = CreateWidget<UFDEmoteMenuWidget>(this, EmoteMenuWidgetClass);
+		}
+
+		if (EmoteMenuWidgetInstance)
+		{
+			// 캐릭터에 붙어있는 이모트 컴포넌트를 넘겨줘서, 버튼 클릭 시 바로 서버 요청을 보낼 수 있게 함
+			if (ACharacter* MyCharacter = Cast<ACharacter>(GetPawn()))
+			{
+				if (UFDEmoteComponent* EmoteComp = MyCharacter->FindComponentByClass<UFDEmoteComponent>())
+				{
+					EmoteMenuWidgetInstance->InitializeMenu(EmoteComp);
+				}
+			}
+
+			if (!EmoteMenuWidgetInstance->IsInViewport())
+			{
+				EmoteMenuWidgetInstance->AddToViewport();
+			}
+		}
+
+		// 이동은 허용해야 하니까 GameOnly가 아니라 GameAndUI로 - 커서 보이면서 WASD/카메라도 계속 먹힘
+		SetShowMouseCursor(true);
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		SetInputMode(InputMode);
+	}
+	else
+	{
+		if (EmoteMenuWidgetInstance && EmoteMenuWidgetInstance->IsInViewport())
+		{
+			EmoteMenuWidgetInstance->RemoveFromParent();
+		}
+
+		SetShowMouseCursor(false);
+		SetInputMode(FInputModeGameOnly());
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이모트 메뉴 %s"), bOpen ? TEXT("열림") : TEXT("닫힘"));
 }
 
 void AFDPlayerController::Client_ShowCapturePopup_Implementation()

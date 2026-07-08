@@ -9,11 +9,15 @@
 #include "PlayerState/FDPlayerState.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Customization/FDCustomizationComponent.h"
+#include "Emote/FDEmoteComponent.h"
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
 	// 채색 컴포넌트 생성 - Tagger 쪽 생성자에도 동일하게 추가되어 있음
 	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
+
+	// 이모트 컴포넌트 생성 - 마찬가지로 Tagger 쪽에도 동일하게 추가됨
+	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
 }
 
 void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -66,8 +70,8 @@ void AFDHiderCharacter::BeginPlay()
 		DefaultWalkSpeed = MoveComp->MaxWalkSpeed;
 	}
 
-	// CustomizationComp->BeginPlay()는 컴포넌트 자체 라이프사이클에서 자동 호출되니까
-	// 여기서 따로 호출할 필요 없음 (컴포넌트가 자기 BeginPlay에서 PlayerState 데이터를 읽어감)
+	// CustomizationComp/EmoteComp의 BeginPlay는 컴포넌트 자체 라이프사이클에서 자동 호출되니까
+	// 여기서 따로 호출할 필요 없음
 }
 
 void AFDHiderCharacter::Server_EnterDisguise_Implementation(FName DisguiseRowName)

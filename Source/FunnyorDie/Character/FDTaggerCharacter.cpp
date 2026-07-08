@@ -9,6 +9,7 @@
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
 #include "Customization/FDCustomizationComponent.h"
+#include "Emote/FDEmoteComponent.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -21,6 +22,9 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 
 	// 채색 컴포넌트 생성 - Hider 쪽 생성자에도 동일하게 추가되어 있음
 	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
+
+	// 이모트 컴포넌트 생성 - 마찬가지로 Hider 쪽에도 동일하게 추가됨
+	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
 }
 
 void AFDTaggerCharacter::BeginPlay()

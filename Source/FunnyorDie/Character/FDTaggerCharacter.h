@@ -60,6 +60,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Customization")
 	class UFDCustomizationComponent* CustomizationComp;
 
+	// 이모트(감정표현) 공용 컴포넌트 - Hider 쪽에도 동일하게 부착됨
+	UPROPERTY(VisibleAnywhere, Category = "Emote")
+	class UFDEmoteComponent* EmoteComp;
+
 	// 밸런스 수치 데이터 테이블 (에디터에서 FMatchBalanceSettings 에셋 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Balance")
 	class UDataTable* BalanceDataTable;

@@ -84,6 +84,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Customization")
 	class UFDCustomizationComponent* CustomizationComp;
 
+	// 이모트(감정표현) 공용 컴포넌트 - Tagger 쪽에도 동일하게 부착됨
+	UPROPERTY(VisibleAnywhere, Category = "Emote")
+	class UFDEmoteComponent* EmoteComp;
+
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Disguise")
