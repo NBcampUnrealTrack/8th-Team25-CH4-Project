@@ -87,6 +87,10 @@ protected:
 	// 이모트(감정표현) 공용 컴포넌트 - Tagger 쪽에도 동일하게 부착됨
 	UPROPERTY(VisibleAnywhere, Category = "Emote")
 	class UFDEmoteComponent* EmoteComp;
+	
+	// 각자 가질 아이템 인벤토리
+	UPROPERTY(VisibleAnywhere, Category = "Item")
+	class UFDItemInventoryComponent* ItemInventoryComp;
 
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)

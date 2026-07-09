@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
+#include "Item/FDItemInventoryComponent.h"
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
@@ -18,6 +19,9 @@ AFDHiderCharacter::AFDHiderCharacter()
 
 	// 이모트 컴포넌트 생성 - 마찬가지로 Tagger 쪽에도 동일하게 추가됨
 	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
+	
+	// 인벤토리 
+	ItemInventoryComp = CreateDefaultSubobject<UFDItemInventoryComponent>(TEXT("ItemInventoryComp"));
 }
 
 void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
