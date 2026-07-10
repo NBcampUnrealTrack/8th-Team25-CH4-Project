@@ -117,5 +117,42 @@ void UFDItemInventoryComponent::OnRep_Inventory()
 
 void UFDItemInventoryComponent::ExecuteEffect(const FFDItemData& Data)
 {
-	UE_LOG(LogTemp, Warning, TEXT("효과 발동"));
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetOwner());
+	if (!Hider) return;
+
+	switch (Data.Effect)
+	{
+	case EFDItemEffect::Invisibility:
+		{
+			// 투명화 켜기
+			Hider->SetItemInvisible(true);
+
+			// Duration초 뒤 자동으로 끄기
+			GetWorld()->GetTimerManager().SetTimer(EffectExpireTimerHandle,
+				[Hider]()
+				{
+					if (IsValid(Hider))
+					{
+						Hider->SetItemInvisible(false);
+					}
+				},
+				Data.Duration, false);
+			break;
+			
+			case EFDItemEffect::TaggerStun:
+			// 투사체
+			break;
+
+			case EFDItemEffect::ForcedEmote:
+			// 강제 이모션
+			break;
+
+			case EFDItemEffect::Noise:
+			// 소리
+			break;
+
+			default:
+			break;
+		}
+	}
 }

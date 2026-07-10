@@ -11,6 +11,8 @@
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Emote/FDEmoteMenuWidget.h"
+#include "Character/FDHiderCharacter.h"
+#include "Item/FDItemInventoryComponent.h"
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -92,6 +94,12 @@ void AFDPlayerController::SetupInputComponent()
 	{
 		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Started, this, &AFDPlayerController::Input_ToggleEmoteMenu);
 	}
+	
+	// 투명화 아이템 사용 입력 바인딩 (하이더 전용)
+	if (IA_UseInvisibility)
+	{
+		EIC->BindAction(IA_UseInvisibility, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseInvisibility);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -145,6 +153,22 @@ void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
 	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
 	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
 	Server_RequestSpare();
+}
+
+void AFDPlayerController::Input_UseInvisibility(const FInputActionValue& Value)
+{
+	// 내가 조종하는 게 하이더인지 확인
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn());
+	if (!Hider) return;
+
+	// 하이더에 붙어있는 인벤토리 컴포넌트 찾기
+	UFDItemInventoryComponent* Inventory =
+		Hider->FindComponentByClass<UFDItemInventoryComponent>();
+	if (!Inventory) return;
+
+	// 서버에 투명화 사용 요청
+	UE_LOG(LogTemp, Warning, TEXT("[컨트롤러] Server_UseItem 호출"));
+	Inventory->Server_UseItem(EFDItemEffect::Invisibility);
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)

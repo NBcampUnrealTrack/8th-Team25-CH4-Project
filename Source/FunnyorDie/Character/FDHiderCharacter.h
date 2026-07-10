@@ -49,6 +49,9 @@ public:
 	// 현재 무적 여부 조회 ( bIsInvincible이 복제되므로 클라이언트/서버 모두 사용 가능)
 	bool IsInvincible() const { return bIsInvincible; }
 
+	// 아이템 투명화 on/off
+	void SetItemInvisible(bool bNewInvisible);
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -92,6 +95,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Item")
 	class UFDItemInventoryComponent* ItemInventoryComp;
 
+	// 아이템 투명화 상태 
+	UPROPERTY(ReplicatedUsing = OnRep_bIsItemInvisible)
+	bool bIsItemInvisible = false;
+
+	// bIsItemInvisible 복제 시 호출되는 콜백
+	UFUNCTION()
+	void OnRep_bIsItemInvisible();
+	
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Disguise")

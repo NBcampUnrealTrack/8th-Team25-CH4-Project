@@ -33,6 +33,9 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 	// bIsInvincible을 모든 클라이언트에 복제 등록
 	DOREPLIFETIME(AFDHiderCharacter, bIsInvincible);
+	
+	// 투명화 아이템
+	DOREPLIFETIME(AFDHiderCharacter, bIsItemInvisible);
 }
 
 bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
@@ -223,4 +226,27 @@ const FMatchBalanceSettings* AFDHiderCharacter::GetBalanceSettings() const
 	return BalanceDataTable->FindRow<FMatchBalanceSettings>(
 		TEXT("Default"), TEXT("밸런스 설정 조회")
 	);
+}
+
+void AFDHiderCharacter::SetItemInvisible(bool bNewInvisible)
+{
+	if (!HasAuthority()) return;
+
+	bIsItemInvisible = bNewInvisible;
+
+	// 서버니까 직접 호출
+	OnRep_bIsItemInvisible();
+}
+
+void AFDHiderCharacter::OnRep_bIsItemInvisible()
+{
+	// 투명화 상태에 따라 메시 표시/숨김
+	// SetVisibility(false)는 눈에만 안 보임 
+	// 콜리전은 그대로라 술래가 부딪히면 위치 노출됨
+	USkeletalMeshComponent* SkeletalMesh = GetMesh();
+	if (!SkeletalMesh) return;
+
+	// 투명화 상태니까 bIsItemInvisible은 true인 상태 
+	// 근데 메시는 안보여야 하니까 ! 붙인 것
+	SkeletalMesh->SetVisibility(!bIsItemInvisible, true);
 }
