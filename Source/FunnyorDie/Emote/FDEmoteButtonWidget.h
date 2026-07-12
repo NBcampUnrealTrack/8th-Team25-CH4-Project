@@ -26,6 +26,9 @@ public:
 	// 메뉴 위젯이 버튼 생성 직후 호출해서 표시 정보를 채워줌
 	void Setup(FName InRowName, const FText& InDisplayName, UTexture2D* InIcon);
 
+	// 등록된 이모트가 없는 슬롯을 빈 슬롯으로 표시 (휠 모양은 유지하되 클릭 비활성화)
+	void SetupEmpty();
+
 protected:
 	virtual void NativeConstruct() override;
 
@@ -41,6 +44,7 @@ protected:
 
 private:
 	FName RowName;
+	bool bIsEmptySlot = false;
 
 	UFUNCTION()
 	void OnButtonClicked();

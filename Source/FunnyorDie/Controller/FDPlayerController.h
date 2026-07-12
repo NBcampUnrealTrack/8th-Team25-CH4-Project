@@ -80,7 +80,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Paint;
 
-	// 이모트 메뉴 토글 인풋 액션 (에디터에서 할당) - 이동 허용이라 기본 IMC에 그대로 포함
+	// 이모트 메뉴 홀드 인풋 액션 (에디터에서 할당) - 누르고 있는 동안만 열림, 이동 허용이라 기본 IMC에 그대로 포함
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_EmoteMenu;
 	
@@ -103,9 +103,6 @@ private:
 	// 현재 뷰포트에 떠있는 이모트 메뉴 위젯 인스턴스
 	UPROPERTY()
 	UFDEmoteMenuWidget* EmoteMenuWidgetInstance;
-
-	// 이모트 메뉴 열림 여부 (토글용 플래그)
-	bool bEmoteMenuOpen = false;
 	
 	// 마우스 좌클릭 → 서버에 공격 요청
 	void Input_Attack(const FInputActionValue& Value);
@@ -133,8 +130,9 @@ private:
 	// 커서 아래를 트레이스해서 자기 캐릭터 메시 UV를 뽑아내고, 커스터마이징 컴포넌트에 페인팅 요청
 	void TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd);
 
-	// 이모트 메뉴 토글 입력 처리
-	void Input_ToggleEmoteMenu(const FInputActionValue& Value);
+	// 이모트 메뉴 홀드 입력 처리 - 누르는 동안만 열림, 떼면 바로 닫힘
+	void Input_EmoteMenuHoldStart(const FInputActionValue& Value);
+	void Input_EmoteMenuHoldEnd(const FInputActionValue& Value);
 
 	// 실제로 메뉴를 열고 닫는 함수 - 이동/카메라는 계속 허용되게 FInputModeGameAndUI 사용
 	void ToggleEmoteMenu(bool bOpen);
