@@ -4,13 +4,147 @@
 #include "Character/FDHiderCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
+#include "Item/FDThrowItem.h"
+#include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 
 UFDItemInventoryComponent::UFDItemInventoryComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
-
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	
 	// 복제해야 하니 컴포넌트 자체 복제를 켬
 	SetIsReplicatedByDefault(true);
+}
+
+void UFDItemInventoryComponent::FireThrowItem()
+{
+	// 조준 중이 아니면 무시
+	if (!bIsAiming) return;
+
+	// 조준 해제를 먼저
+	StopAiming();
+
+	// 서버에 발사 요청
+	Server_UseItem(EFDItemEffect::TaggerStun);
+}
+
+void UFDItemInventoryComponent::ToggleAiming()
+{
+	if (bIsAiming)
+	{
+		StopAiming();
+		return;
+	}
+
+	// 투사체가 없으면 조준 진입 불가
+	if (ThrowItemCount <= 0)
+	{
+		return;
+	}
+
+	StartAiming();
+}
+
+void UFDItemInventoryComponent::StartAiming()
+{
+	bIsAiming = true;
+
+	// Tick 켜기
+	SetComponentTickEnabled(true);
+
+	UE_LOG(LogTemp, Warning, TEXT("조준 시작"));
+}
+
+void UFDItemInventoryComponent::StopAiming()
+{
+	bIsAiming = false;
+
+	SetComponentTickEnabled(false);
+
+	UE_LOG(LogTemp, Warning, TEXT("조준 종료"));
+}
+
+void UFDItemInventoryComponent::GetThrowStartAndVelocity(FVector& OutStart, FVector& OutVelocity) const
+{
+	OutStart = FVector::ZeroVector;
+	OutVelocity = FVector::ZeroVector;
+
+	const AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetOwner());
+	if (!Hider) return;
+
+	// 하이더가 보는 방향
+	const FRotator ControlRot = Hider->GetControlRotation();
+	const FVector ThrowDir = ControlRot.Vector(); // 회전값을 방향 벡터로 변환 (제공된 함수)
+
+	// 발사 시작점
+	OutStart = Hider->GetActorLocation()
+		+ ThrowDir * ThrowForwardOffset
+		+ FVector(0.f, 0.f, ThrowUpOffset);
+
+	// 발사 속도 벡터 = 방향 × 속력
+	OutVelocity = ThrowDir * ThrowSpeed;
+}
+
+void UFDItemInventoryComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                              FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!bIsAiming) return;
+
+	UpdateTrajectory();
+}
+
+void UFDItemInventoryComponent::UpdateTrajectory()
+{
+	FVector StartLoc;
+	FVector LaunchVelocity;
+	GetThrowStartAndVelocity(StartLoc, LaunchVelocity);
+
+	if (LaunchVelocity.IsNearlyZero()) return;
+
+	// 궤적 예측 파라미터 설정 (제공된 함수)
+	FPredictProjectilePathParams PathParams;
+	PathParams.StartLocation = StartLoc;
+	PathParams.LaunchVelocity = LaunchVelocity;
+	PathParams.ProjectileRadius = 20.f;              // ThrowItem의 구체 반지름과 맞춤
+	PathParams.OverrideGravityZ = 0.f;               // 0이면 월드 기본 중력 사용
+	PathParams.bTraceWithCollision = true;           // 벽에 부딪히면 거기서 궤적 종료
+	PathParams.TraceChannel = ECC_Visibility;
+	PathParams.MaxSimTime = 3.f;                     // 최대 3초까지만 시뮬레이션
+	PathParams.SimFrequency = 15.f;                  // 초당 15개 점으로 경로 계산
+	PathParams.DrawDebugType = EDrawDebugTrace::None; // 자동 그리기 끔
+
+	// 자기 자신은 궤적 충돌 대상에서 제외
+	PathParams.ActorsToIgnore.Add(GetOwner());
+
+	// 궤적 예측 결과를 담을 구조체
+	FPredictProjectilePathResult PathResult;
+
+	// 실제 예측 실행 (제공 함수)
+	const bool bHit = UGameplayStatics::PredictProjectilePath(this, PathParams, PathResult);
+
+	// 계산된 경로 점들을 디버그 선으로 이어서 그리기
+	const TArray<FPredictProjectilePathPointData>& Points = PathResult.PathData;
+	for (int32 i = 0; i < Points.Num() - 1; ++i)
+	{
+		DrawDebugLine(
+			GetWorld(),
+			Points[i].Location,
+			Points[i + 1].Location,
+			FColor::Cyan,
+			false,      // 영구 지속 안 함
+			-1.f,       // 다음 프레임에 사라짐 (매 프레임 다시 그림)
+			0,
+			3.f);       // 선 두께
+	}
+
+	// 착지 지점 표시 (벽/바닥에 맞은 경우)
+	if (bHit)
+	{
+		DrawDebugSphere(GetWorld(), PathResult.HitResult.Location, 20.f, 12, FColor::Red, false, -1.f);
+	}
 }
 
 void UFDItemInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -122,12 +256,11 @@ void UFDItemInventoryComponent::ExecuteEffect(const FFDItemData& Data)
 
 	switch (Data.Effect)
 	{
+		// 투명화
 	case EFDItemEffect::Invisibility:
 		{
-			// 투명화 켜기
 			Hider->SetItemInvisible(true);
 
-			// Duration초 뒤 자동으로 끄기
 			GetWorld()->GetTimerManager().SetTimer(EffectExpireTimerHandle,
 				[Hider]()
 				{
@@ -138,21 +271,49 @@ void UFDItemInventoryComponent::ExecuteEffect(const FFDItemData& Data)
 				},
 				Data.Duration, false);
 			break;
-			
-			case EFDItemEffect::TaggerStun:
-			// 투사체
-			break;
+		}
 
-			case EFDItemEffect::ForcedEmote:
-			// 강제 이모션
-			break;
+		// 투사체
+	case EFDItemEffect::TaggerStun:
+		{
+			if (!Data.ThrowItemClass) break;
 
-			case EFDItemEffect::Noise:
-			// 소리
-			break;
+			// 궤적 표시와 정확히 같은 계산을 사용 - 보이는 대로 날아가게 보장
+			FVector StartLoc;
+			FVector LaunchVelocity;
+			GetThrowStartAndVelocity(StartLoc, LaunchVelocity);
 
-			default:
+			if (LaunchVelocity.IsNearlyZero()) break;
+
+			// 발사 방향으로 회전값 설정 (속도 벡터를 회전으로 변환)
+			const FRotator SpawnRot = LaunchVelocity.Rotation();
+
+			FActorSpawnParameters Params;
+			Params.Instigator = Hider;
+			Params.Owner = Hider;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			AFDThrowItem* Throw = GetWorld()->SpawnActor<AFDThrowItem>(
+				Data.ThrowItemClass, StartLoc, SpawnRot, Params);
+
+			if (Throw)
+			{
+				Throw->SetStunDuration(Data.Duration);
+				// 궤적 계산에 쓴 것과 동일한 속도 벡터를 실제 투사체에 적용
+				Throw->LaunchWith(LaunchVelocity);
+			}
 			break;
 		}
+
+		// 강제 이모션
+	case EFDItemEffect::ForcedEmote:
+		break;
+
+		// 소리
+	case EFDItemEffect::Noise:
+		break;
+
+	default:
+		break;
 	}
 }

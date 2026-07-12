@@ -100,6 +100,12 @@ void AFDPlayerController::SetupInputComponent()
 	{
 		EIC->BindAction(IA_UseInvisibility, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseInvisibility);
 	}
+	
+	// 투사체 사용 입력 바인딩 (하이더 전용)
+	if (IA_UseThrowItem)
+	{
+		EIC->BindAction(IA_UseThrowItem, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseThrowItem);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -142,10 +148,24 @@ void AFDPlayerController::Input_Look(const FInputActionValue& Value)
 void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 {
 	// 마우스 좌클릭 → 서버에 공격 요청 (술래 전용)
-	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
-	if (!Tagger) return;
+	if (AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn()))
+	{
+		Tagger->Server_TryCapture();
+		return;
+	}
+	
+	// 하이더: 조준 중이면 좌클릭 → 투사체 발사
+	if (AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn()))
+	{
+		UFDItemInventoryComponent* Inventory =
+			Hider->FindComponentByClass<UFDItemInventoryComponent>();
+		if (!Inventory) return;
 
-	Tagger->Server_TryCapture();
+		// 조준 중이 아니면 좌클릭은 아무 의미 없음
+		if (!Inventory->IsAiming()) return;
+
+		Inventory->FireThrowItem();
+	}
 }
 
 void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
@@ -169,6 +189,18 @@ void AFDPlayerController::Input_UseInvisibility(const FInputActionValue& Value)
 	// 서버에 투명화 사용 요청
 	UE_LOG(LogTemp, Warning, TEXT("[컨트롤러] Server_UseItem 호출"));
 	Inventory->Server_UseItem(EFDItemEffect::Invisibility);
+}
+
+void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
+{
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn());
+	if (!Hider) return;
+
+	UFDItemInventoryComponent* Inventory =
+		Hider->FindComponentByClass<UFDItemInventoryComponent>();
+	if (!Inventory) return;
+
+	Inventory->ToggleAiming();
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)

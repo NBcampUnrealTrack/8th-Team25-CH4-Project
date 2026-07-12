@@ -88,6 +88,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_UseInvisibility;
 	
+	// 투사체 사용 키 (X) - 하이더 전용
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	UInputAction* IA_UseThrowItem;
+	
 	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당) -> 부모클래스 변경
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<class UFDCapturePopupWidget> CaptureWidgetClass;
@@ -122,8 +126,11 @@ private:
 	// 봐주기 키 입력 처리 → 서버에 봐주기 요청
 	void Input_Spare(const FInputActionValue& Value);
 	
-	// 토명화
+	// 투명화
 	void Input_UseInvisibility(const FInputActionValue& Value);
+	
+	// 투사체
+	void Input_UseThrowItem(const FInputActionValue& Value);
 
 	// 페인팅 입력 처리 - Started/Triggered/Completed 각각 스트로크 시작/중간/끝에 대응
 	void Input_PaintStart(const FInputActionValue& Value);
