@@ -104,46 +104,32 @@ void UFDItemInventoryComponent::UpdateTrajectory()
 
 	if (LaunchVelocity.IsNearlyZero()) return;
 
-	// 궤적 예측 파라미터 설정 (제공된 함수)
 	FPredictProjectilePathParams PathParams;
 	PathParams.StartLocation = StartLoc;
 	PathParams.LaunchVelocity = LaunchVelocity;
-	PathParams.ProjectileRadius = 20.f;              // ThrowItem의 구체 반지름과 맞춤
-	PathParams.OverrideGravityZ = 0.f;               // 0이면 월드 기본 중력 사용
-	PathParams.bTraceWithCollision = true;           // 벽에 부딪히면 거기서 궤적 종료
+	PathParams.ProjectileRadius = 20.f;
+	PathParams.OverrideGravityZ = GetWorld()->GetGravityZ() * ThrowGravityScale;
+	PathParams.bTraceWithCollision = true;
 	PathParams.TraceChannel = ECC_Visibility;
-	PathParams.MaxSimTime = 3.f;                     // 최대 3초까지만 시뮬레이션
-	PathParams.SimFrequency = 15.f;                  // 초당 15개 점으로 경로 계산
-	PathParams.DrawDebugType = EDrawDebugTrace::None; // 자동 그리기 끔
-
-	// 자기 자신은 궤적 충돌 대상에서 제외
+	PathParams.MaxSimTime = 3.f;
+	PathParams.SimFrequency = 15.f;
+	PathParams.DrawDebugType = EDrawDebugTrace::None;
 	PathParams.ActorsToIgnore.Add(GetOwner());
 
-	// 궤적 예측 결과를 담을 구조체
 	FPredictProjectilePathResult PathResult;
-
-	// 실제 예측 실행 (제공 함수)
 	const bool bHit = UGameplayStatics::PredictProjectilePath(this, PathParams, PathResult);
 
-	// 계산된 경로 점들을 디버그 선으로 이어서 그리기
-	const TArray<FPredictProjectilePathPointData>& Points = PathResult.PathData;
-	for (int32 i = 0; i < Points.Num() - 1; ++i)
-	{
-		DrawDebugLine(
-			GetWorld(),
-			Points[i].Location,
-			Points[i + 1].Location,
-			FColor::Cyan,
-			false,      // 영구 지속 안 함
-			-1.f,       // 다음 프레임에 사라짐 (매 프레임 다시 그림)
-			0,
-			3.f);       // 선 두께
-	}
-
-	// 착지 지점 표시 (벽/바닥에 맞은 경우)
+	// 착지 지점만 표시
 	if (bHit)
 	{
-		DrawDebugSphere(GetWorld(), PathResult.HitResult.Location, 20.f, 12, FColor::Red, false, -1.f);
+		DrawDebugSphere(
+			GetWorld(),
+			PathResult.HitResult.Location,
+			30.f,               // 반지름
+			16,                 // 세그먼트
+			FColor::Cyan,
+			false,
+			-1.f);              // 매 프레임 다시 그림
 	}
 }
 

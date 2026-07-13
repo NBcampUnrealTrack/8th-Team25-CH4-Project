@@ -28,9 +28,9 @@ AFDThrowItem::AFDThrowItem()
 
 	// 포물선 이동 컴포넌트
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
-	ProjectileMovement->InitialSpeed = 1200.f;   // 발사 초기 속도
-	ProjectileMovement->MaxSpeed = 1200.f;
-	ProjectileMovement->ProjectileGravityScale = 1.f; // 1이면 정상 중력 (포물선), 0이면 직선
+	ProjectileMovement->InitialSpeed = 2500.f;   // 발사 초기 속도
+	ProjectileMovement->MaxSpeed = 2500.f;
+	ProjectileMovement->ProjectileGravityScale = 0.5f; // 1이면 정상 중력 (포물선), 0이면 직선
 	ProjectileMovement->bRotationFollowsVelocity = true; // 날아가는 방향으로 메시가 회전
 }
 
