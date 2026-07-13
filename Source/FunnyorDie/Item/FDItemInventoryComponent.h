@@ -32,6 +32,19 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Item")
 	int32 GetThrowItemCount() const { return ThrowItemCount; }
+	
+	// 조준 중 좌클릭 → 실제 발사 
+	void FireThrowItem();
+	
+	// 투사체가 있을 때만 조준 진입 가능
+	void ToggleAiming();
+
+	// 조준 중인지 (로컬 판단용)
+	bool IsAiming() const { return bIsAiming; }
+
+	// 매 프레임 궤적 갱신용 (조준 중일 때만 Tick이 켜짐)
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -51,6 +64,22 @@ protected:
 	// 아이템 데이터 테이블 (에디터에서 DT_ItemData 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Item")
 	class UDataTable* ItemDataTable;
+	
+	// 투사체 발사 속도 - AFDThrowItem의 InitialSpeed와 반드시 같아야 함
+	// (다르면 화면에 보이는 궤적과 실제 날아가는 경로가 어긋남)
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	float ThrowSpeed = 1200.f;
+
+	// 투사체 중력 스케일 - AFDThrowItem의 ProjectileGravityScale과 같아야 함
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	float ThrowGravityScale = 1.f;
+
+	// 발사 시작점 오프셋 - 하이더 기준 앞으로/위로 얼마나 띄울지
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	float ThrowForwardOffset = 100.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	float ThrowUpOffset = 50.f;
 
 private:
 	// 실제 효과 실행 (서버 전용)
@@ -61,4 +90,17 @@ private:
 	static constexpr int32 MaxThrowItem = 3;
 
 	FTimerHandle EffectExpireTimerHandle;
+	
+	// 조준 상태 - 복제 안함
+	bool bIsAiming = false;
+
+	// 조준 중 궤적을 계산해서 화면에 표시
+	void UpdateTrajectory();
+
+	// 조준 시작/종료 내부 처리 (Tick 켜고 끄기 포함)
+	void StartAiming();
+	void StopAiming();
+	
+	// 발사 시작 위치/방향 계산 - 궤적 표시와 실제 발사가 같은 값을 쓰도록 공용화
+	void GetThrowStartAndVelocity(FVector& OutStart, FVector& OutVelocity) const;
 };

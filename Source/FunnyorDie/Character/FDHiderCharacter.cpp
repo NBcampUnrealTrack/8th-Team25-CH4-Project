@@ -3,6 +3,7 @@
 
 #include "Character/FDHiderCharacter.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "GameState/FDGameState.h"
@@ -11,6 +12,9 @@
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Item/FDItemInventoryComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "Components/AudioComponent.h" 
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
@@ -22,6 +26,12 @@ AFDHiderCharacter::AFDHiderCharacter()
 	
 	// 인벤토리 
 	ItemInventoryComp = CreateDefaultSubobject<UFDItemInventoryComponent>(TEXT("ItemInventoryComp"));
+
+	// 동상 머리 장비 메시 생성 - 머리 소켓에 붙여두고 평소엔 숨겨둠 (장착 전까지 비어있는 상태)
+	HeadEquipMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeadEquipMesh"));
+	HeadEquipMesh->SetupAttachment(GetMesh(), HeadSocketName);
+	HeadEquipMesh->SetVisibility(false);
+	HeadEquipMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 장식용이라 콜리전 불필요
 }
 
 void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -36,6 +46,9 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	
 	// 투명화 아이템
 	DOREPLIFETIME(AFDHiderCharacter, bIsItemInvisible);
+
+	// 동상 머리 장비
+	DOREPLIFETIME(AFDHiderCharacter, EquippedHeadRow);
 }
 
 bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
@@ -60,6 +73,63 @@ bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor*
 	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
 }
 
+void AFDHiderCharacter::Multicast_PlayNoise_Implementation(float Duration)
+{
+	if (!NoiseSound)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NoiseSound가 할당되지 않음"));
+		return;
+	}
+
+	// 이미 소리가 나고 있으면 먼저 정지 (중복 재생 방지)
+	StopNoise();
+
+	// 리턴값을 붙잡아둬야 나중에 Stop()을 부를 수 있음
+	// bAutoDestroy를 false로
+	ActiveNoiseAudio = UGameplayStatics::SpawnSoundAttached(
+		NoiseSound,
+		GetRootComponent(),
+		NAME_None,
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget,
+		true,       // bStopWhenAttachedToDestroyed
+		1.f,        // VolumeMultiplier
+		1.f,        // PitchMultiplier
+		0.f,        // StartTime
+		nullptr,    // AttenuationSettings
+		nullptr,    // ConcurrencySettings
+		false       // bAutoDestroy ← false! 우리가 Stop을 부를 때까지 살아있어야 함
+	);
+
+	if (!ActiveNoiseAudio)
+	{
+		return;
+	}
+
+	// Duration 뒤 자동 정지
+	GetWorldTimerManager().SetTimer(
+		NoiseStopTimerHandle,
+		this,
+		&AFDHiderCharacter::StopNoise,
+		Duration,
+		false);
+
+}
+
+void AFDHiderCharacter::StopNoise()
+{
+	if (ActiveNoiseAudio)
+	{
+		ActiveNoiseAudio->Stop();
+		ActiveNoiseAudio = nullptr;
+
+		UE_LOG(LogTemp, Warning, TEXT("소리 정지"));
+	}
+
+	GetWorldTimerManager().ClearTimer(NoiseStopTimerHandle);
+}
+
 void AFDHiderCharacter::BeginPlay()
 {
 	Super::BeginPlay();
@@ -79,6 +149,12 @@ void AFDHiderCharacter::BeginPlay()
 
 	// CustomizationComp/EmoteComp의 BeginPlay는 컴포넌트 자체 라이프사이클에서 자동 호출되니까
 	// 여기서 따로 호출할 필요 없음
+
+	// 늦은 조인 등으로 EquippedHeadRow가 BeginPlay 이전에 이미 복제돼있을 수 있어서 한 번 수동 적용
+	if (!EquippedHeadRow.IsNone())
+	{
+		OnRep_EquippedHeadRow();
+	}
 }
 
 void AFDHiderCharacter::Server_EnterDisguise_Implementation(FName DisguiseRowName)
@@ -249,4 +325,64 @@ void AFDHiderCharacter::OnRep_bIsItemInvisible()
 	// 투명화 상태니까 bIsItemInvisible은 true인 상태 
 	// 근데 메시는 안보여야 하니까 ! 붙인 것
 	SkeletalMesh->SetVisibility(!bIsItemInvisible, true);
+
+	// TODO: 투명화 중엔 동상 머리 장비(HeadEquipMesh)도 같이 숨겨야 할지 기획 확인 필요
+	// 지금은 몸은 안 보이는데 머리 장비만 둥둥 떠있는 것처럼 보일 수 있음
+}
+
+void AFDHiderCharacter::Server_RequestEquipHead_Implementation(FName HeadRowName)
+{
+	// TODO: 위장 중(bIsDisguised)이면 장비 불가 처리할지 기획 확인 필요
+	// - 위장 캡슐 상태에서 머리 장비까지 같이 보이면 어색할 수 있음
+
+	if (!HeadEquipDataTable)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[숨는자] 동상 머리 데이터 테이블이 할당되지 않음"));
+		return;
+	}
+
+	// 유효한 행인지 서버에서 먼저 검증 (클라이언트가 존재하지 않는 이름을 보내는 경우 방어)
+	if (!HeadEquipDataTable->FindRow<FFDHeadEquipData>(HeadRowName, TEXT("동상 머리 유효성 검사")))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[숨는자] 존재하지 않는 동상 머리 요청: %s"), *HeadRowName.ToString());
+		return;
+	}
+
+	EquippedHeadRow = HeadRowName;
+
+	// 서버 자기 자신은 OnRep이 자동 호출되지 않으므로 수동 호출 (기존 패턴과 동일)
+	OnRep_EquippedHeadRow();
+
+	UE_LOG(LogTemp, Log, TEXT("[숨는자] 동상 머리 장착 - %s"), *HeadRowName.ToString());
+}
+
+void AFDHiderCharacter::OnRep_EquippedHeadRow()
+{
+	if (!HeadEquipMesh) return;
+
+	if (EquippedHeadRow.IsNone() || !HeadEquipDataTable)
+	{
+		HeadEquipMesh->SetVisibility(false);
+		return;
+	}
+
+	const FFDHeadEquipData* Data = HeadEquipDataTable->FindRow<FFDHeadEquipData>(EquippedHeadRow, TEXT("동상 머리 조회"));
+	if (!Data)
+	{
+		HeadEquipMesh->SetVisibility(false);
+		return;
+	}
+
+	// TSoftObjectPtr라 동기 로드 필요 - 자주 안 바뀌는 리소스라 비동기 스트리밍까지는 안 해도 될 듯
+	if (UStaticMesh* LoadedHeadMesh = Data->HeadMesh.LoadSynchronous())
+	{
+		HeadEquipMesh->SetStaticMesh(LoadedHeadMesh);
+		HeadEquipMesh->SetRelativeTransform(Data->AttachOffset);
+		HeadEquipMesh->SetVisibility(true);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[숨는자] 동상 머리 메시 로드 실패: %s"), *EquippedHeadRow.ToString());
+		HeadEquipMesh->SetVisibility(false);
+	}
 }

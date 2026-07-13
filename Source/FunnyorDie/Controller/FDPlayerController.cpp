@@ -89,16 +89,23 @@ void AFDPlayerController::SetupInputComponent()
 		EIC->BindAction(IA_Paint, ETriggerEvent::Completed, this, &AFDPlayerController::Input_PaintEnd);
 	}
 
-	// 이모트 메뉴 토글 바인딩 - 이동/카메라랑 안 겹치니 기본 IMC에 그대로 포함
+	// 이모트 메뉴 - 키를 누르고 있는 동안만 표시 (떼면 자동으로 닫힘)
 	if (IA_EmoteMenu)
 	{
-		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Started, this, &AFDPlayerController::Input_ToggleEmoteMenu);
+		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Started, this, &AFDPlayerController::Input_EmoteMenuHoldStart);
+		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Completed, this, &AFDPlayerController::Input_EmoteMenuHoldEnd);
 	}
 	
 	// 투명화 아이템 사용 입력 바인딩 (하이더 전용)
 	if (IA_UseInvisibility)
 	{
 		EIC->BindAction(IA_UseInvisibility, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseInvisibility);
+	}
+	
+	// 투사체 사용 입력 바인딩 (하이더 전용)
+	if (IA_UseThrowItem)
+	{
+		EIC->BindAction(IA_UseThrowItem, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseThrowItem);
 	}
 }
 
@@ -142,10 +149,24 @@ void AFDPlayerController::Input_Look(const FInputActionValue& Value)
 void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 {
 	// 마우스 좌클릭 → 서버에 공격 요청 (술래 전용)
-	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
-	if (!Tagger) return;
+	if (AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn()))
+	{
+		Tagger->Server_TryCapture();
+		return;
+	}
+	
+	// 하이더: 조준 중이면 좌클릭 → 투사체 발사
+	if (AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn()))
+	{
+		UFDItemInventoryComponent* Inventory =
+			Hider->FindComponentByClass<UFDItemInventoryComponent>();
+		if (!Inventory) return;
 
-	Tagger->Server_TryCapture();
+		// 조준 중이 아니면 좌클릭은 아무 의미 없음
+		if (!Inventory->IsAiming()) return;
+
+		Inventory->FireThrowItem();
+	}
 }
 
 void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
@@ -169,6 +190,18 @@ void AFDPlayerController::Input_UseInvisibility(const FInputActionValue& Value)
 	// 서버에 투명화 사용 요청
 	UE_LOG(LogTemp, Warning, TEXT("[컨트롤러] Server_UseItem 호출"));
 	Inventory->Server_UseItem(EFDItemEffect::Invisibility);
+}
+
+void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
+{
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn());
+	if (!Hider) return;
+
+	UFDItemInventoryComponent* Inventory =
+		Hider->FindComponentByClass<UFDItemInventoryComponent>();
+	if (!Inventory) return;
+
+	Inventory->ToggleAiming();
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)
@@ -245,10 +278,14 @@ void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
 	}
 }
 
-void AFDPlayerController::Input_ToggleEmoteMenu(const FInputActionValue& Value)
+void AFDPlayerController::Input_EmoteMenuHoldStart(const FInputActionValue& Value)
 {
-	bEmoteMenuOpen = !bEmoteMenuOpen;
-	ToggleEmoteMenu(bEmoteMenuOpen);
+	ToggleEmoteMenu(true);
+}
+
+void AFDPlayerController::Input_EmoteMenuHoldEnd(const FInputActionValue& Value)
+{
+	ToggleEmoteMenu(false);
 }
 
 void AFDPlayerController::ToggleEmoteMenu(bool bOpen)
@@ -277,11 +314,18 @@ void AFDPlayerController::ToggleEmoteMenu(bool bOpen)
 			}
 		}
 
-		// 이동은 허용해야 하니까 GameOnly가 아니라 GameAndUI로 - 커서 보이면서 WASD/카메라도 계속 먹힘
-		SetShowMouseCursor(true);
-		FInputModeGameAndUI InputMode;
-		InputMode.SetHideCursorDuringCapture(false);
-		SetInputMode(InputMode);
+		// ※ 중요: SetInputMode/SetShowMouseCursor를 지금 이 프레임에서 바로 호출하면
+		// Enhanced Input이 "지금 누르고 있던 IA_EmoteMenu 키가 떼졌다"고 오인해서
+		// 곧바로 Completed 이벤트를 쏴버리는 문제가 있음 (뷰포트 포커스 변화로 입력 상태가 리셋됨)
+		// 그래서 입력 모드 전환만 한 프레임 뒤로 미뤄서, 지금 처리 중인 Started 이벤트가
+		// 끝난 뒤에 안전하게 실행되게 함
+		GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+		{
+			SetShowMouseCursor(true);
+			FInputModeGameAndUI InputMode;
+			InputMode.SetHideCursorDuringCapture(false);
+			SetInputMode(InputMode);
+		});
 	}
 	else
 	{
