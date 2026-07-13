@@ -80,6 +80,19 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
 	float ThrowUpOffset = 50.f;
+	
+	// 조준 마커용 데칼 머티리얼 (에디터에서 M_AimDecal 할당)
+	// Material Domain = Deferred Decal 이어야 함
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	class UMaterialInterface* AimDecalMaterial;
+
+	// 데칼 크기 (십자선 크기 조절)
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	FVector AimDecalSize = FVector(20.f, 60.f, 60.f); 
+	
+	// 조준선 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
+	TSubclassOf<class UUserWidget> AimCrosshairWidgetClass;
 
 private:
 	// 실제 효과 실행 (서버 전용)
@@ -103,4 +116,12 @@ private:
 	
 	// 발사 시작 위치/방향 계산 - 궤적 표시와 실제 발사가 같은 값을 쓰도록 공용화
 	void GetThrowStartAndVelocity(FVector& OutStart, FVector& OutVelocity) const;
+	
+	// 현재 떠있는 조준 데칼
+	UPROPERTY()
+	class UDecalComponent* ActiveAimDecal;
+	
+	// 현재 떠있는 조준선 위젯 - 조준 종료 시 제거하려고 붙잡아둠
+	UPROPERTY()
+	class UUserWidget* ActiveCrosshair;
 };

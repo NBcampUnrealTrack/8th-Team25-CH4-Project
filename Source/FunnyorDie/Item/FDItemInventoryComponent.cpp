@@ -7,6 +7,8 @@
 #include "Item/FDThrowItem.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "Components/DecalComponent.h"
+#include "Blueprint/UserWidget.h"
 
 UFDItemInventoryComponent::UFDItemInventoryComponent()
 {
@@ -52,6 +54,33 @@ void UFDItemInventoryComponent::StartAiming()
 
 	// Tick 켜기
 	SetComponentTickEnabled(true);
+	
+	// 조준 데칼 생성
+	if (!ActiveAimDecal && AimDecalMaterial)
+	{
+		ActiveAimDecal = UGameplayStatics::SpawnDecalAtLocation(
+			GetWorld(),
+			AimDecalMaterial,
+			AimDecalSize,
+			FVector::ZeroVector,                // 위치는 매 프레임 갱신할 거라 일단 원점
+			FRotator(-90.f, 0.f, 0.f),          // 아래를 향하게 (바닥에 투영)
+			0.f                                  // LifeSpan 0 = 무한 (직접 제거)
+		);
+	}
+	
+	// 조준선 위젯 표시
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetOwner());
+	if (Hider && Hider->IsLocallyControlled() && !ActiveCrosshair && AimCrosshairWidgetClass)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(Hider->GetController()))
+		{
+			ActiveCrosshair = CreateWidget<UUserWidget>(PC, AimCrosshairWidgetClass);
+			if (ActiveCrosshair)
+			{
+				ActiveCrosshair->AddToViewport();
+			}
+		}
+	}
 
 	UE_LOG(LogTemp, Warning, TEXT("조준 시작"));
 }
@@ -59,9 +88,22 @@ void UFDItemInventoryComponent::StartAiming()
 void UFDItemInventoryComponent::StopAiming()
 {
 	bIsAiming = false;
-
 	SetComponentTickEnabled(false);
+	
+	// 조준 데칼 제거
+	if (ActiveAimDecal)
+	{
+		ActiveAimDecal->DestroyComponent();
+		ActiveAimDecal = nullptr;
+	}
 
+	// 조준선 위젯 제거
+	if (ActiveCrosshair)
+	{
+		ActiveCrosshair->RemoveFromParent();
+		ActiveCrosshair = nullptr;
+	}
+	
 	UE_LOG(LogTemp, Warning, TEXT("조준 종료"));
 }
 
@@ -119,17 +161,25 @@ void UFDItemInventoryComponent::UpdateTrajectory()
 	FPredictProjectilePathResult PathResult;
 	const bool bHit = UGameplayStatics::PredictProjectilePath(this, PathParams, PathResult);
 
-	// 착지 지점만 표시
-	if (bHit)
+	// 착지 지점에 조준 데칼 표시
+	if (bHit && ActiveAimDecal)
 	{
-		DrawDebugSphere(
-			GetWorld(),
-			PathResult.HitResult.Location,
-			30.f,               // 반지름
-			16,                 // 세그먼트
-			FColor::Cyan,
-			false,
-			-1.f);              // 매 프레임 다시 그림
+		// 표면에서 살짝 띄워서 배치
+		const FVector DecalLoc = PathResult.HitResult.Location
+			+ PathResult.HitResult.ImpactNormal * 50.f;
+
+		ActiveAimDecal->SetWorldLocation(DecalLoc);
+
+		// 표면 법선을 따라 눕히기 (경사면에도 자연스럽게 붙음)
+		const FRotator DecalRot = (-PathResult.HitResult.ImpactNormal).Rotation();
+		ActiveAimDecal->SetWorldRotation(DecalRot);
+
+		ActiveAimDecal->SetVisibility(true);
+	}
+	else if (ActiveAimDecal)
+	{
+		// 아무데도 안 맞으면 (허공을 향할 때) 데칼 숨김
+		ActiveAimDecal->SetVisibility(false);
 	}
 }
 
