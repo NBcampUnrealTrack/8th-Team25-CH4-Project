@@ -59,6 +59,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestEquipHead(FName HeadRowName);
 	
+	// 소리 아이템 발동 - 모든 클라이언트에서 하이더 위치에 사운드 재생
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayNoise(float Duration);
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -149,4 +153,18 @@ private:
 
 	// 데이터 테이블에서 밸런스 설정값을 가져오는 헬퍼 함수
 	const FMatchBalanceSettings* GetBalanceSettings() const;
+	
+	// 소리 아이템용 사운드 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Item")
+	class USoundBase* NoiseSound;
+	
+	// 재생 중인 소리 - 타이머로 정지시키려면 붙잡고 있어야 함
+	UPROPERTY()
+	class UAudioComponent* ActiveNoiseAudio;
+
+	// 소리 정지 타이머
+	FTimerHandle NoiseStopTimerHandle;
+
+	// 소리 정지
+	void StopNoise();
 };

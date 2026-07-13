@@ -12,7 +12,6 @@ enum class EFDItemEffect : uint8
 	None,
 	Invisibility,   // 하이더 투명화
 	TaggerStun,     // 술래 멈추기 - 던져서 맞춤
-	ForcedEmote,    // 강제 이모션
 	Noise     // 소리 발생
 };
 

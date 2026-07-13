@@ -12,6 +12,9 @@
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Item/FDItemInventoryComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "Components/AudioComponent.h" 
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
@@ -68,6 +71,63 @@ bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor*
 	}
 
 	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
+}
+
+void AFDHiderCharacter::Multicast_PlayNoise_Implementation(float Duration)
+{
+	if (!NoiseSound)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NoiseSound가 할당되지 않음"));
+		return;
+	}
+
+	// 이미 소리가 나고 있으면 먼저 정지 (중복 재생 방지)
+	StopNoise();
+
+	// 리턴값을 붙잡아둬야 나중에 Stop()을 부를 수 있음
+	// bAutoDestroy를 false로
+	ActiveNoiseAudio = UGameplayStatics::SpawnSoundAttached(
+		NoiseSound,
+		GetRootComponent(),
+		NAME_None,
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget,
+		true,       // bStopWhenAttachedToDestroyed
+		1.f,        // VolumeMultiplier
+		1.f,        // PitchMultiplier
+		0.f,        // StartTime
+		nullptr,    // AttenuationSettings
+		nullptr,    // ConcurrencySettings
+		false       // bAutoDestroy ← false! 우리가 Stop을 부를 때까지 살아있어야 함
+	);
+
+	if (!ActiveNoiseAudio)
+	{
+		return;
+	}
+
+	// Duration 뒤 자동 정지
+	GetWorldTimerManager().SetTimer(
+		NoiseStopTimerHandle,
+		this,
+		&AFDHiderCharacter::StopNoise,
+		Duration,
+		false);
+
+}
+
+void AFDHiderCharacter::StopNoise()
+{
+	if (ActiveNoiseAudio)
+	{
+		ActiveNoiseAudio->Stop();
+		ActiveNoiseAudio = nullptr;
+
+		UE_LOG(LogTemp, Warning, TEXT("소리 정지"));
+	}
+
+	GetWorldTimerManager().ClearTimer(NoiseStopTimerHandle);
 }
 
 void AFDHiderCharacter::BeginPlay()

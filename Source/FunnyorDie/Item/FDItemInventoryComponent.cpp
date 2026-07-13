@@ -291,13 +291,12 @@ void UFDItemInventoryComponent::ExecuteEffect(const FFDItemData& Data)
 			break;
 		}
 
-		// 강제 이모션
-	case EFDItemEffect::ForcedEmote:
-		break;
-
 		// 소리
 	case EFDItemEffect::Noise:
-		break;
+		{
+			Hider->Multicast_PlayNoise(Data.Duration);
+			break;
+		}
 
 	default:
 		break;
