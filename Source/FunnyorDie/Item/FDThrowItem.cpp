@@ -61,7 +61,9 @@ void AFDThrowItem::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(OtherActor);
 	if (Tagger)
 	{
-		// 나중에 술래 멈추는 거 여기에 넣을 거임
+		// 스턴 적용은 술래 자신이 관리 (타이머 포함)
+		// 투사체는 바로 Destroy되니까 타이머를 여기서 걸면 같이 사라져버림
+		Tagger->ApplyStun(StunDuration);
 		
 		UE_LOG(LogTemp, Warning, TEXT("술래 맞춤]"));
 	}

@@ -47,6 +47,15 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void SetScoutingMode(bool bEnable);
 	
+	// 투사체에 맞았을 때 스턴 적용 (서버 전용 - AFDThrowItem에서 호출)
+	// 이미 스턴 중이면 무시 (연장 없음 - 술래를 계속 묶어둘 수 없게)
+	void ApplyStun(float Duration);
+
+	// 현재 스턴 상태인지 조회 (bIsStunned가 복제되므로 클라/서버 모두 사용 가능)
+	bool IsStunned() const { return bIsStunned; }
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
 private:
 	// 관전모드때 술래 메시 안보이게 하기
 	UFUNCTION(NetMulticast, Reliable)
@@ -88,4 +97,17 @@ private:
 	void OnSpareExpired(ACharacter* TargetHider);
 	
 	void Internal_ResolveCaptureLocally(bool bWasCaptured); // 공통 마무리 로직
+	
+	// 스턴 상태 - 서버에서 변경 시 클라이언트에 자동 전파
+	UPROPERTY(ReplicatedUsing = OnRep_bIsStunned)
+	bool bIsStunned = false;
+
+	UFUNCTION()
+	void OnRep_bIsStunned();
+
+	// 스턴 해제 타이머
+	FTimerHandle StunExpireTimerHandle;
+
+	// 스턴 해제 처리 (서버 전용)
+	void OnStunExpired();
 };
