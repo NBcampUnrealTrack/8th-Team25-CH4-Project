@@ -6,6 +6,7 @@
 #include "GameDataTypes.generated.h"
 
 class UAnimMontage; // FFDEmoteData::Montage 전방 선언
+class UStaticMesh;  // FFDHeadEquipData::HeadMesh 전방 선언
 
 /**
  * 사물(Prop) 속성 데이터 구조체
@@ -132,6 +133,36 @@ public:
 		: DisplayName(FText::GetEmpty())
 		, Montage(nullptr)
 		, Icon(nullptr)
+	{
+	}
+};
+
+/**
+ * 동상 머리 장비 데이터 구조체
+ * 필드의 동상 오브젝트와 상호작용하면 이 중 하나를 골라 Hider 캐릭터 머리에 장착함
+ */
+USTRUCT(BlueprintType)
+struct FFDHeadEquipData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// UI/로그에 표시될 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	FText DisplayName;
+
+	// 동상 머리 메시 (자주 안 바뀌는 리소스라 TSoftObjectPtr로 필요할 때만 로드)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	TSoftObjectPtr<UStaticMesh> HeadMesh;
+
+	// 머리 소켓에 붙일 때 위치/회전/크기 미세 보정용 (동상마다 원점이 다를 수 있어서)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	FTransform AttachOffset;
+
+	// 기본값 설정 (생성자)
+	FFDHeadEquipData()
+		: DisplayName(FText::GetEmpty())
+		, AttachOffset(FTransform::Identity)
 	{
 	}
 };
