@@ -127,6 +127,13 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Equip")
 	class UStaticMeshComponent* HeadEquipMesh;
 
+	// 하이더는 3인칭 고정 - SpringArm으로 카메라를 캐릭터 뒤에 띄움
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	class USpringArmComponent* CameraBoom;
+
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	class UCameraComponent* FollowCamera;
+
 	// 동상 머리 데이터 테이블 (에디터에서 DT_HeadEquip 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Equip")
 	UDataTable* HeadEquipDataTable;
