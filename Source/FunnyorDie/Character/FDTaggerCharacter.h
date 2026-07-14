@@ -44,8 +44,12 @@ public:
 	void Server_TryCapture();
 
 	// 관전 모드 (GameMode가 Phase 변화에 맞춰 호출)
+	// true: 정찰 단계 - 하늘을 자유비행하며 맵 탐색 / false: 본게임 - 일반 걷기 모드
 	UFUNCTION(BlueprintCallable)
 	void SetScoutingMode(bool bEnable);
+
+	// 현재 비행(정찰) 중인지 여부 - PlayerController에서 상하 입력/시야 방향 이동 판단에 사용
+	bool IsFlying() const;
 	
 	// 투사체에 맞았을 때 스턴 적용 (서버 전용 - AFDThrowItem에서 호출)
 	// 이미 스턴 중이면 무시 (연장 없음 - 술래를 계속 묶어둘 수 없게)
@@ -64,6 +68,10 @@ private:
 	// 포획 판정용 콜리전 컴포넌트 (에디터에서 크기 조절 가능)
 	UPROPERTY(VisibleAnywhere, Category = "Capture")
 	class USphereComponent* CaptureCollision;
+
+	// 술래는 1인칭 고정 - 캡슐에 눈높이로 바로 부착
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	class UCameraComponent* FirstPersonCamera;
 
 	// 채색(커스터마이징) 공용 컴포넌트 - Hider 쪽에도 동일하게 부착됨
 	UPROPERTY(VisibleAnywhere, Category = "Customization")
