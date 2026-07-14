@@ -5,12 +5,22 @@
 #include "GameFramework/PlayerController.h"
 #include "FDStartPlayerController.generated.h"
 
+class UFDStartWidget;
+
 UCLASS()
 class FUNNYORDIE_API AFDStartPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
-	// 지금은 빈 채로 둠
-	// 메뉴 위젯 띄우기에서 BeginPlay 오버라이드해서
-	// CreateWidget + AddToViewport + SetInputMode(UIOnly) 추가할 예정
+protected:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	// 메뉴 위젯 블루프린트 클래스
+	UPROPERTY(EditDefaultsOnly, Category = "Menu")
+	TSubclassOf<UFDStartWidget> StartWidgetClass;
+
+	// 현재 떠있는 메뉴 위젯 인스턴스
+	UPROPERTY()
+	UFDStartWidget* StartWidget;
 };

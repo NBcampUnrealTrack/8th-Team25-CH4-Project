@@ -34,6 +34,8 @@ public:
 
 	// 정찰 단계 시야 차단용
 	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
+	
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// 위장 상태 진입 요청 (클라이언트 → 서버)
 	UFUNCTION(Server, Reliable)
@@ -49,6 +51,18 @@ public:
 	// 현재 무적 여부 조회 ( bIsInvincible이 복제되므로 클라이언트/서버 모두 사용 가능)
 	bool IsInvincible() const { return bIsInvincible; }
 
+	// 아이템 투명화 on/off
+	void SetItemInvisible(bool bNewInvisible);
+
+	// 동상 오브젝트와 상호작용해서 머리 장비 장착 요청 (클라이언트 → 서버)
+	// 상호작용 시스템(E키/트레이스 등, 팀원 확인 예정)이 무엇이든 이 함수 하나만 호출하면 연결됨
+	UFUNCTION(Server, Reliable)
+	void Server_RequestEquipHead(FName HeadRowName);
+	
+	// 소리 아이템 발동 - 모든 클라이언트에서 하이더 위치에 사운드 재생
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayNoise(float Duration);
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -84,6 +98,43 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Customization")
 	class UFDCustomizationComponent* CustomizationComp;
 
+	// 이모트(감정표현) 공용 컴포넌트 - Tagger 쪽에도 동일하게 부착됨
+	UPROPERTY(VisibleAnywhere, Category = "Emote")
+	class UFDEmoteComponent* EmoteComp;
+	
+	// 각자 가질 아이템 인벤토리
+	UPROPERTY(VisibleAnywhere, Category = "Item")
+	class UFDItemInventoryComponent* ItemInventoryComp;
+
+	// 아이템 투명화 상태 
+	UPROPERTY(ReplicatedUsing = OnRep_bIsItemInvisible)
+	bool bIsItemInvisible = false;
+
+	// bIsItemInvisible 복제 시 호출되는 콜백
+	UFUNCTION()
+	void OnRep_bIsItemInvisible();
+
+	// 현재 장착 중인 동상 머리 행 이름 - Hider 전용 기능이라 컴포넌트로 안 빼고 직접 관리
+	// 아무것도 장착 안 했으면 NAME_None
+	UPROPERTY(ReplicatedUsing = OnRep_EquippedHeadRow)
+	FName EquippedHeadRow = NAME_None;
+
+	// EquippedHeadRow 복제 시 클라이언트에서 호출 - 실제로 메시를 갈아끼우는 지점
+	UFUNCTION()
+	void OnRep_EquippedHeadRow();
+
+	// 동상 머리가 실제로 붙는 메시 컴포넌트 - 생성자에서 만들어두고 머리 소켓에 부착, 평소엔 숨겨둠
+	UPROPERTY(VisibleAnywhere, Category = "Equip")
+	class UStaticMeshComponent* HeadEquipMesh;
+
+	// 동상 머리 데이터 테이블 (에디터에서 DT_HeadEquip 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Equip")
+	UDataTable* HeadEquipDataTable;
+
+	// HeadEquipMesh를 붙일 스켈레톤 소켓 이름 (에디터에서 실제 소켓 이름에 맞춰 수정 필요)
+	UPROPERTY(EditDefaultsOnly, Category = "Equip")
+	FName HeadSocketName = TEXT("head");
+	
 private:
 	// 위장 사물 크기 데이터 테이블 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Disguise")
@@ -102,4 +153,18 @@ private:
 
 	// 데이터 테이블에서 밸런스 설정값을 가져오는 헬퍼 함수
 	const FMatchBalanceSettings* GetBalanceSettings() const;
+	
+	// 소리 아이템용 사운드 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Item")
+	class USoundBase* NoiseSound;
+	
+	// 재생 중인 소리 - 타이머로 정지시키려면 붙잡고 있어야 함
+	UPROPERTY()
+	class UAudioComponent* ActiveNoiseAudio;
+
+	// 소리 정지 타이머
+	FTimerHandle NoiseStopTimerHandle;
+
+	// 소리 정지
+	void StopNoise();
 };

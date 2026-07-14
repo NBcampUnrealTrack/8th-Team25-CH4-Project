@@ -9,6 +9,8 @@
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
 #include "Customization/FDCustomizationComponent.h"
+#include "Emote/FDEmoteComponent.h"
+#include "Net/UnrealNetwork.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -21,6 +23,9 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 
 	// 채색 컴포넌트 생성 - Hider 쪽 생성자에도 동일하게 추가되어 있음
 	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
+
+	// 이모트 컴포넌트 생성 - 마찬가지로 Hider 쪽에도 동일하게 추가됨
+	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
 }
 
 void AFDTaggerCharacter::BeginPlay()
@@ -38,6 +43,9 @@ void AFDTaggerCharacter::BeginPlay()
 
 void AFDTaggerCharacter::Server_TryCapture_Implementation()
 {
+	// 스턴 중엔 포획 불가
+	if (bIsStunned) return;
+
 	// 공격 입력 시 포획 콜리전을 잠깐 활성화해 Overlap 감지
 	CaptureCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
@@ -110,6 +118,13 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 	
 	Multicast_SetMeshVisibility(!bEnable);
 	// 관전 모드 진입하면 메시 숨겨야 하니까 반대값 전달 (false가 전달됨)
+}
+
+void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	
+	DOREPLIFETIME(AFDTaggerCharacter, bIsStunned);
 }
 
 void AFDTaggerCharacter::Multicast_SetMeshVisibility_Implementation(bool bVisible)
@@ -298,4 +313,59 @@ void AFDTaggerCharacter::RequestSpare() // 봐주기 누르면 호출될 함수
 		InvincibleTime, false);
 
 	Internal_ResolveCaptureLocally(false);
+}
+
+void AFDTaggerCharacter::ApplyStun(float Duration)
+{
+	// 서버 권한으로만 상태 변경
+	if (!HasAuthority()) return;
+
+	// 이미 스턴 중이면 무시 (연장 안 됨)
+	// 하이더 여럿이 연속으로 던져서 술래를 계속 묶어두는 걸 방지
+	if (bIsStunned)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[술래] 이미 스턴 중 - 중복 스턴 무시"));
+		return;
+	}
+
+	bIsStunned = true;
+	OnRep_bIsStunned(); // 서버 수동 호출
+
+	// 이동 입력 차단 (해당 클라에게만)
+	if (AFDPlayerController* FDPC = Cast<AFDPlayerController>(GetController()))
+	{
+		FDPC->Client_LockMovement();
+	}
+
+	// Duration 후 자동 해제
+	GetWorldTimerManager().SetTimer(
+		StunExpireTimerHandle,
+		this,
+		&AFDTaggerCharacter::OnStunExpired,
+		Duration,
+		false);
+
+}
+
+void AFDTaggerCharacter::OnStunExpired()
+{
+	if (!HasAuthority()) return;
+
+	bIsStunned = false;
+	OnRep_bIsStunned();
+
+	// 이동 입력 복구
+	if (AFDPlayerController* FDPC = Cast<AFDPlayerController>(GetController()))
+	{
+		FDPC->Client_UnlockMovement();
+	}
+
+	GetWorldTimerManager().ClearTimer(StunExpireTimerHandle);
+
+	UE_LOG(LogTemp, Warning, TEXT("[술래] 스턴 해제"));
+}
+
+void AFDTaggerCharacter::OnRep_bIsStunned()
+{
+	// 스턴 이펙트(별 빙빙, 머티리얼 변화 등) 켜고 끄는 비주얼 처리는 여기에 추가
 }

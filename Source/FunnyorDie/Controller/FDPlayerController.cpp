@@ -9,6 +9,10 @@
 #include "UI/FDCapturePopupWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Customization/FDCustomizationComponent.h"
+#include "Emote/FDEmoteComponent.h"
+#include "Emote/FDEmoteMenuWidget.h"
+#include "Character/FDHiderCharacter.h"
+#include "Item/FDItemInventoryComponent.h"
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -21,36 +25,6 @@ void AFDPlayerController::Client_UnlockMovement_Implementation()
 {
 	SetIgnoreMoveInput(false);
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제 (클라이언트)"));
-}
-
-void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
-{
-	UEnhancedInputLocalPlayerSubsystem* Subsystem =
-		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-	if (!Subsystem) return;
-
-	if (bEnable)
-	{
-		if (DefaultMappingContext)
-		{
-			Subsystem->RemoveMappingContext(DefaultMappingContext);
-		}
-		if (CustomizationMappingContext)
-		{
-			Subsystem->AddMappingContext(CustomizationMappingContext, 0);
-		}
-	}
-	else
-	{
-		if (CustomizationMappingContext)
-		{
-			Subsystem->RemoveMappingContext(CustomizationMappingContext);
-		}
-		if (DefaultMappingContext)
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
-	}
 }
 
 void AFDPlayerController::BeginPlay()
@@ -114,6 +88,25 @@ void AFDPlayerController::SetupInputComponent()
 		EIC->BindAction(IA_Paint, ETriggerEvent::Triggered, this, &AFDPlayerController::Input_PaintOngoing);
 		EIC->BindAction(IA_Paint, ETriggerEvent::Completed, this, &AFDPlayerController::Input_PaintEnd);
 	}
+
+	// 이모트 메뉴 - 키를 누르고 있는 동안만 표시 (떼면 자동으로 닫힘)
+	if (IA_EmoteMenu)
+	{
+		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Started, this, &AFDPlayerController::Input_EmoteMenuHoldStart);
+		EIC->BindAction(IA_EmoteMenu, ETriggerEvent::Completed, this, &AFDPlayerController::Input_EmoteMenuHoldEnd);
+	}
+	
+	// 투명화 아이템 사용 입력 바인딩 (하이더 전용)
+	if (IA_UseInvisibility)
+	{
+		EIC->BindAction(IA_UseInvisibility, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseInvisibility);
+	}
+	
+	// 투사체 사용 입력 바인딩 (하이더 전용)
+	if (IA_UseThrowItem)
+	{
+		EIC->BindAction(IA_UseThrowItem, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseThrowItem);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -156,10 +149,24 @@ void AFDPlayerController::Input_Look(const FInputActionValue& Value)
 void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 {
 	// 마우스 좌클릭 → 서버에 공격 요청 (술래 전용)
-	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
-	if (!Tagger) return;
+	if (AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn()))
+	{
+		Tagger->Server_TryCapture();
+		return;
+	}
+	
+	// 하이더: 조준 중이면 좌클릭 → 투사체 발사
+	if (AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn()))
+	{
+		UFDItemInventoryComponent* Inventory =
+			Hider->FindComponentByClass<UFDItemInventoryComponent>();
+		if (!Inventory) return;
 
-	Tagger->Server_TryCapture();
+		// 조준 중이 아니면 좌클릭은 아무 의미 없음
+		if (!Inventory->IsAiming()) return;
+
+		Inventory->FireThrowItem();
+	}
 }
 
 void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
@@ -167,6 +174,34 @@ void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
 	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
 	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
 	Server_RequestSpare();
+}
+
+void AFDPlayerController::Input_UseInvisibility(const FInputActionValue& Value)
+{
+	// 내가 조종하는 게 하이더인지 확인
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn());
+	if (!Hider) return;
+
+	// 하이더에 붙어있는 인벤토리 컴포넌트 찾기
+	UFDItemInventoryComponent* Inventory =
+		Hider->FindComponentByClass<UFDItemInventoryComponent>();
+	if (!Inventory) return;
+
+	// 서버에 투명화 사용 요청
+	UE_LOG(LogTemp, Warning, TEXT("[컨트롤러] Server_UseItem 호출"));
+	Inventory->Server_UseItem(EFDItemEffect::Invisibility);
+}
+
+void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
+{
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn());
+	if (!Hider) return;
+
+	UFDItemInventoryComponent* Inventory =
+		Hider->FindComponentByClass<UFDItemInventoryComponent>();
+	if (!Inventory) return;
+
+	Inventory->ToggleAiming();
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)
@@ -190,8 +225,6 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	if (!MyCharacter) return;
 
 	// 커스터마이징 화면(캐릭터를 정면으로 비추고 마우스로 칠하는 상황)을 가정한 트레이스
-	// 인게임 필드에서 그대로 쓰면 카메라 각도상 자기 캐릭터가 커서 아래 잘 안 잡힐 수 있어서
-	// 전용 커스터마이징 카메라/뷰로 전환한 상태에서 호출하는 걸 권장
 	FHitResult Hit;
 	GetHitResultUnderCursor(ECC_Visibility, true, Hit);
 
@@ -203,7 +236,7 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	FVector2D UV;
 	// ※ 확인 필요: 프로젝트 세팅(Project Settings -> Physics)에서
 	// "Support UV From Hit Results" 옵션을 켜야 하고, 메시 콜리전이 Complex Collision을 사용해야
-	// FindCollisionUV가 정상적으로 UV를 반환함. 꺼져 있으면 항상 실패함.
+	// FindCollisionUV가 정상적으로 UV를 반환함.
 	if (!UGameplayStatics::FindCollisionUV(Hit, 0, UV))
 	{
 		return;
@@ -213,6 +246,99 @@ void AFDPlayerController::TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd)
 	{
 		CustomComp->RequestLocalPaint(UV, bStrokeStart, bStrokeEnd);
 	}
+}
+
+void AFDPlayerController::SetCustomizationInputMode(bool bEnable)
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!Subsystem) return;
+
+	if (bEnable)
+	{
+		if (DefaultMappingContext)
+		{
+			Subsystem->RemoveMappingContext(DefaultMappingContext);
+		}
+		if (CustomizationMappingContext)
+		{
+			Subsystem->AddMappingContext(CustomizationMappingContext, 0);
+		}
+	}
+	else
+	{
+		if (CustomizationMappingContext)
+		{
+			Subsystem->RemoveMappingContext(CustomizationMappingContext);
+		}
+		if (DefaultMappingContext)
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
+}
+
+void AFDPlayerController::Input_EmoteMenuHoldStart(const FInputActionValue& Value)
+{
+	ToggleEmoteMenu(true);
+}
+
+void AFDPlayerController::Input_EmoteMenuHoldEnd(const FInputActionValue& Value)
+{
+	ToggleEmoteMenu(false);
+}
+
+void AFDPlayerController::ToggleEmoteMenu(bool bOpen)
+{
+	if (bOpen)
+	{
+		if (!EmoteMenuWidgetInstance && EmoteMenuWidgetClass)
+		{
+			EmoteMenuWidgetInstance = CreateWidget<UFDEmoteMenuWidget>(this, EmoteMenuWidgetClass);
+		}
+
+		if (EmoteMenuWidgetInstance)
+		{
+			// 캐릭터에 붙어있는 이모트 컴포넌트를 넘겨줘서, 버튼 클릭 시 바로 서버 요청을 보낼 수 있게 함
+			if (ACharacter* MyCharacter = Cast<ACharacter>(GetPawn()))
+			{
+				if (UFDEmoteComponent* EmoteComp = MyCharacter->FindComponentByClass<UFDEmoteComponent>())
+				{
+					EmoteMenuWidgetInstance->InitializeMenu(EmoteComp);
+				}
+			}
+
+			if (!EmoteMenuWidgetInstance->IsInViewport())
+			{
+				EmoteMenuWidgetInstance->AddToViewport();
+			}
+		}
+
+		// ※ 중요: SetInputMode/SetShowMouseCursor를 지금 이 프레임에서 바로 호출하면
+		// Enhanced Input이 "지금 누르고 있던 IA_EmoteMenu 키가 떼졌다"고 오인해서
+		// 곧바로 Completed 이벤트를 쏴버리는 문제가 있음 (뷰포트 포커스 변화로 입력 상태가 리셋됨)
+		// 그래서 입력 모드 전환만 한 프레임 뒤로 미뤄서, 지금 처리 중인 Started 이벤트가
+		// 끝난 뒤에 안전하게 실행되게 함
+		GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+		{
+			SetShowMouseCursor(true);
+			FInputModeGameAndUI InputMode;
+			InputMode.SetHideCursorDuringCapture(false);
+			SetInputMode(InputMode);
+		});
+	}
+	else
+	{
+		if (EmoteMenuWidgetInstance && EmoteMenuWidgetInstance->IsInViewport())
+		{
+			EmoteMenuWidgetInstance->RemoveFromParent();
+		}
+
+		SetShowMouseCursor(false);
+		SetInputMode(FInputModeGameOnly());
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이모트 메뉴 %s"), bOpen ? TEXT("열림") : TEXT("닫힘"));
 }
 
 void AFDPlayerController::Client_ShowCapturePopup_Implementation()
