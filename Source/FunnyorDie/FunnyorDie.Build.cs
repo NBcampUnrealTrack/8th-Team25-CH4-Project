@@ -10,7 +10,12 @@ public class FunnyorDie : ModuleRules
 	
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput"
+			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
+			
+			// EOS
+			"OnlineSubsystem",        
+			"OnlineSubsystemEOS",     
+			"OnlineSubsystemUtils"    
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
