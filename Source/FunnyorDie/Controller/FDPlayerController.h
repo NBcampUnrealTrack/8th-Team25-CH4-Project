@@ -76,6 +76,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Spare;
 
+	// 정찰 비행 중 상승/하강 인풋 액션 (Axis1D Float, 예: Space=+1 / Ctrl=-1) — 술래 전용, 정찰 단계에서만 동작
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	UInputAction* IA_FlyVertical;
+
 	// 채색(페인팅) 인풋 액션 - 마우스 좌클릭 드래그로 그림 (CustomizationMappingContext 전용)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Paint;
@@ -122,6 +126,9 @@ private:
 	
 	// 봐주기 키 입력 처리 → 서버에 봐주기 요청
 	void Input_Spare(const FInputActionValue& Value);
+
+	// 정찰 비행 중 상승/하강 처리 - 비행 중인 술래가 아니면 무시됨
+	void Input_FlyVertical(const FInputActionValue& Value);
 	
 	// 투명화
 	void Input_UseInvisibility(const FInputActionValue& Value);

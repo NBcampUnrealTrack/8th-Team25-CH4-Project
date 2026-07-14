@@ -4,6 +4,8 @@
 #include "Character/FDHiderCharacter.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "GameState/FDGameState.h"
@@ -32,6 +34,26 @@ AFDHiderCharacter::AFDHiderCharacter()
 	HeadEquipMesh->SetupAttachment(GetMesh(), HeadSocketName);
 	HeadEquipMesh->SetVisibility(false);
 	HeadEquipMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 장식용이라 콜리전 불필요
+
+	// 3인칭 카메라 - SpringArm이 마우스 회전을 받고, 카메라는 그 끝에 그대로 매달림
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(GetCapsuleComponent());
+	CameraBoom->TargetArmLength = 350.f;
+	CameraBoom->SetRelativeLocation(FVector(0.f, 0.f, 60.f));
+	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->bDoCollisionTest = true; // 벽에 카메라 파고들지 않게 자동으로 당겨줌
+
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false; // 붐이 이미 회전을 받았으니 카메라 자체는 추가 회전 불필요
+
+	// 3인칭이라 몸은 이동 방향으로 자연스럽게 도는 게 자연스러움 (기본값 유지, 명시적으로 적어둠)
+	bUseControllerRotationYaw = false;
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->bOrientRotationToMovement = true;
+		MoveComp->RotationRate = FRotator(0.f, 540.f, 0.f);
+	}
 }
 
 void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

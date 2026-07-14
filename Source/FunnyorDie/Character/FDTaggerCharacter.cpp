@@ -5,6 +5,8 @@
 #include "Character/FDHiderCharacter.h"
 #include "Controller/FDPlayerController.h"
 #include "Components/SphereComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
@@ -26,6 +28,19 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 
 	// 이모트 컴포넌트 생성 - 마찬가지로 Hider 쪽에도 동일하게 추가됨
 	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
+
+	// 1인칭 카메라 - 캡슐 눈높이(BaseEyeHeight)에 바로 부착, 마우스 회전을 그대로 카메라에 반영
+	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
+	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
+	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	FirstPersonCamera->bUsePawnControlRotation = true;
+
+	// 1인칭이라 몸 자체가 마우스 좌우 회전을 따라가야 함 (3인칭 기본값인 이동방향 정렬은 꺼둠)
+	bUseControllerRotationYaw = true;
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->bOrientRotationToMovement = false;
+	}
 }
 
 void AFDTaggerCharacter::BeginPlay()
@@ -109,15 +124,35 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 
 	if (bEnable)
 	{
-		Movement->MaxWalkSpeed = ScoutSpeed; // 정찰모드시 술래 속도 증가
+		// 정찰 단계: 걷기 대신 자유비행 모드로 전환해서 하늘에서 맵을 둘러볼 수 있게 함
+		Movement->SetMovementMode(MOVE_Flying);
+		Movement->MaxFlySpeed = ScoutSpeed;
+
+		// 벽/바닥에 막히지 않고 자유롭게 돌아다니게 하려면 콜리전도 꺼야 함
+		// (그냥 Flying만 켜면 벽은 못 뚫고 위/아래로만 자유로워짐 - 기획에 따라 아래 줄은 빼도 됨)
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Ignore);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
 	}
 	else
 	{
-		Movement->MaxWalkSpeed = NormalSpeed; // 아니면 원래대로 
+		// 본게임 시작: 다시 걷기 모드로 복귀, 콜리전도 원상복구
+		Movement->SetMovementMode(MOVE_Walking);
+		Movement->MaxWalkSpeed = NormalSpeed;
+
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
 	}
 	
 	Multicast_SetMeshVisibility(!bEnable);
 	// 관전 모드 진입하면 메시 숨겨야 하니까 반대값 전달 (false가 전달됨)
+}
+
+bool AFDTaggerCharacter::IsFlying() const
+{
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	return Movement && Movement->IsFlying();
 }
 
 void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

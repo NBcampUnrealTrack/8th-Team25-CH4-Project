@@ -183,6 +183,12 @@ void UFDItemInventoryComponent::UpdateTrajectory()
 	}
 }
 
+void UFDItemInventoryComponent::Client_NotifyItemAcquired_Implementation(EFDItemEffect Which)
+{
+	// 획득 알림 방송
+	OnItemAcquired.Broadcast(Which);
+}
+
 void UFDItemInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -215,12 +221,12 @@ void UFDItemInventoryComponent::ReceiveDrawnItem(FName ItemRow)
 	case EFDItemEffect::Invisibility:
 		if (InvisibilityCount >= MaxInvisibility)
 		{
-			// 이미 가득 참 획득 실패
 			Client_NotifyInventoryFull(EFDItemEffect::Invisibility);
 			return;
 		}
 		++InvisibilityCount;
-		OnRep_Inventory(); // 서버 수동 호출 (UI 갱신하는 함수)
+		OnRep_Inventory();
+		Client_NotifyItemAcquired(EFDItemEffect::Invisibility);
 		break;
 
 	case EFDItemEffect::TaggerStun:
@@ -231,6 +237,7 @@ void UFDItemInventoryComponent::ReceiveDrawnItem(FName ItemRow)
 		}
 		++ThrowItemCount;
 		OnRep_Inventory();
+		Client_NotifyItemAcquired(EFDItemEffect::TaggerStun);
 		break;
 
 	default:
@@ -277,12 +284,46 @@ void UFDItemInventoryComponent::Server_UseItem_Implementation(EFDItemEffect Whic
 
 void UFDItemInventoryComponent::Client_NotifyInventoryFull_Implementation(EFDItemEffect Which)
 {
-	// UI에 "최대 n개까지만 보관할 수 있습니다" 경고 문구 만들어서 여기에 띄우기
+	// 한도 초과 방송
+	OnInventoryFull.Broadcast(Which);
 }
 
 void UFDItemInventoryComponent::OnRep_Inventory()
 {
-	// 인벤토리 UI 여기에서 갱신 (WBP 연동)
+	// 개수가 바뀌었다고 방송
+	OnInventoryChanged.Broadcast();
+}
+
+void UFDItemInventoryComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	
+	// 로컬 플레이어 화면에만 UI 생성
+	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetOwner());
+	if (!Hider || !Hider->IsLocallyControlled()) return;
+
+	APlayerController* PC = Cast<APlayerController>(Hider->GetController());
+	if (!PC) return;
+
+	// 인벤토리 UI - 계속 떠있음
+	if (InventoryWidgetClass)
+	{
+		InventoryWidget = CreateWidget<UUserWidget>(PC, InventoryWidgetClass);
+		if (InventoryWidget)
+		{
+			InventoryWidget->AddToViewport();
+		}
+	}
+
+	// 알림 UI - 계속 떠있되 평소엔 숨김 (WBP 안에서 제어)
+	if (NotifyWidgetClass)
+	{
+		NotifyWidget = CreateWidget<UUserWidget>(PC, NotifyWidgetClass);
+		if (NotifyWidget)
+		{
+			NotifyWidget->AddToViewport();
+		}
+	}
 }
 
 void UFDItemInventoryComponent::ExecuteEffect(const FFDItemData& Data)

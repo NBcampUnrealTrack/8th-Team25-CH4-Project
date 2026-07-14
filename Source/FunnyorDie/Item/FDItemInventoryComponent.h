@@ -6,6 +6,15 @@
 #include "Item/FDItemTypes.h"
 #include "FDItemInventoryComponent.generated.h"
 
+// 인벤토리 개수가 바뀔 때 (획득/사용 둘 다) - UI 슬롯 숫자 갱신용
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
+
+// 아이템을 획득했을 때 알림용 (어떤 종류인지 전달)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemAcquired, EFDItemEffect, ItemType);
+
+// 한도 초과로 획득 실패했을 때 경고용
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryFull, EFDItemEffect, ItemType);
+
 UCLASS(ClassGroup = (Item), meta = (BlueprintSpawnableComponent))
 class FUNNYORDIE_API UFDItemInventoryComponent : public UActorComponent
 {
@@ -45,6 +54,22 @@ public:
 	// 매 프레임 궤적 갱신용 (조준 중일 때만 Tick이 켜짐)
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
+	
+	
+	// WBP에서 이 이벤트들을 바인딩해서 화면을 갱신함
+	UPROPERTY(BlueprintAssignable, Category = "Item|UI")
+	FOnInventoryChanged OnInventoryChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Item|UI")
+	FOnItemAcquired OnItemAcquired;
+
+	UPROPERTY(BlueprintAssignable, Category = "Item|UI")
+	FOnInventoryFull OnInventoryFull;
+
+	// 아이템 획득 알림 (서버 → 주운 클라이언트에게만)
+	UFUNCTION(Client, Reliable)
+	void Client_NotifyItemAcquired(EFDItemEffect Which);
+	
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -93,6 +118,16 @@ protected:
 	// 조준선 위젯 클래스
 	UPROPERTY(EditDefaultsOnly, Category = "Item|Throw")
 	TSubclassOf<class UUserWidget> AimCrosshairWidgetClass;
+	
+	// 인벤토리 UI 위젯 클래스 (에디터에서 WBP_ItemInventory 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Item|UI")
+	TSubclassOf<class UUserWidget> InventoryWidgetClass;
+
+	// 알림 위젯 클래스 (에디터에서 WBP_ItemNotify 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Item|UI")
+	TSubclassOf<class UUserWidget> NotifyWidgetClass;
+
+	virtual void BeginPlay() override;
 
 private:
 	// 실제 효과 실행 (서버 전용)
@@ -124,4 +159,10 @@ private:
 	// 현재 떠있는 조준선 위젯 - 조준 종료 시 제거하려고 붙잡아둠
 	UPROPERTY()
 	class UUserWidget* ActiveCrosshair;
+	
+	UPROPERTY()
+	class UUserWidget* InventoryWidget;
+
+	UPROPERTY()
+	class UUserWidget* NotifyWidget;
 };
