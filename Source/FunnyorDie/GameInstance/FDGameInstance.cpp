@@ -126,23 +126,26 @@ void UFDGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSucces
 // 클라이언트: 방 검색 → 참가
 void UFDGameInstance::FindAndJoinSession()
 {
-	if (!SessionInterface.IsValid()) return;
+	if (!SessionInterface.IsValid())
+	{ return; }
+
+	UE_LOG(LogTemp, Warning, TEXT("[EOS] 방 검색 시작"));
 
 	SetStatus(EFDSessionStatus::Searching);
 
-	// 검색 조건 그릇 생성 콜백까지 살아있어야 해서 멤버 변수에 보관
 	SearchSettings = MakeShared<FOnlineSessionSearch>();
 	SearchSettings->MaxSearchResults = 20;
 	SearchSettings->bIsLanQuery = false;
-
-	// SEARCH_LOBBIES — 로비 방식으로 만들어진 세션 찾기
-	// 호스트의 bUseLobbiesIfAvailable=true 와 짝을 이룸
+	
 	SearchSettings->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
+	
+	SearchSettings->QuerySettings.Set(SEARCH_KEYWORDS, FString("FunnyorDie"),
+									  EOnlineComparisonOp::Equals);
 
 	SessionInterface->OnFindSessionsCompleteDelegates.AddUObject(
 		this, &UFDGameInstance::OnFindSessionsComplete);
 
-	SessionInterface->FindSessions(0, SearchSettings.ToSharedRef());
+	const bool bStarted = SessionInterface->FindSessions(0, SearchSettings.ToSharedRef());
 }
 
 void UFDGameInstance::OnFindSessionsComplete(bool bWasSuccessful)
