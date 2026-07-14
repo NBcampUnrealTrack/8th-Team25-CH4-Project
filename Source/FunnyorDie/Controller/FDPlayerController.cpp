@@ -185,6 +185,9 @@ void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 		if (!Inventory->IsAiming()) return;
 
 		Inventory->FireThrowItem();
+
+		// 던졌으니 다시 3인칭으로 복귀
+		Hider->SetAimCameraMode(false);
 	}
 }
 
@@ -231,6 +234,10 @@ void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
 	if (!Inventory) return;
 
 	Inventory->ToggleAiming();
+
+	// 3인칭 카메라 위치 때문에 화면 중앙(크로스헤어)이랑 실제 발사 방향이 어긋나 보이는 문제 →
+	// 조준 중엔 1인칭으로 줌인해서 눈높이 = 크로스헤어 = 발사 방향이 일치하게 함
+	Hider->SetAimCameraMode(Inventory->IsAiming());
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)

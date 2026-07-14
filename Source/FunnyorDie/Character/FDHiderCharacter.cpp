@@ -47,6 +47,13 @@ AFDHiderCharacter::AFDHiderCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false; // 붐이 이미 회전을 받았으니 카메라 자체는 추가 회전 불필요
 
+	// 조준용 1인칭 카메라 - 캡슐 눈높이에 직결, 평소엔 비활성화 상태로 대기
+	AimCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("AimCamera"));
+	AimCamera->SetupAttachment(GetCapsuleComponent());
+	AimCamera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	AimCamera->bUsePawnControlRotation = true;
+	AimCamera->SetActive(false);
+
 	// 3인칭이라 몸은 이동 방향으로 자연스럽게 도는 게 자연스러움 (기본값 유지, 명시적으로 적어둠)
 	bUseControllerRotationYaw = false;
 	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
@@ -311,6 +318,24 @@ void AFDHiderCharacter::Multicast_ResizeCapsule_Implementation(float NewRadius, 
 void AFDHiderCharacter::OnCaptureOverlap()
 {
 	// 술래가 포획 범위 내에 들어왔을 때 처리
+}
+
+void AFDHiderCharacter::SetAimCameraMode(bool bAiming)
+{
+	// 로컬(본인) 클라이언트 화면에서만 의미 있는 연출 - 남의 화면에서 내가 어떻게 보이는지랑은 무관
+	if (!IsLocallyControlled()) return;
+
+	if (!FollowCamera || !AimCamera) return;
+
+	FollowCamera->SetActive(!bAiming);
+	AimCamera->SetActive(bAiming);
+
+	// 1인칭으로 줌인했는데 자기 머리/몸이 화면에 걸리면 어색하니까 본인 시점에서만 메시 숨김
+	// SetOwnerNoSee는 로컬 소유 시점에만 적용되고 다른 클라이언트 화면엔 영향 없음
+	if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+	{
+		SkeletalMesh->SetOwnerNoSee(bAiming);
+	}
 }
 
 const FMatchBalanceSettings* AFDHiderCharacter::GetBalanceSettings() const

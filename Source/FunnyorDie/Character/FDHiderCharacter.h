@@ -62,6 +62,10 @@ public:
 	// 소리 아이템 발동 - 모든 클라이언트에서 하이더 위치에 사운드 재생
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayNoise(float Duration);
+
+	// 투사체 조준 시작/종료에 맞춰 1인칭 ↔ 3인칭 카메라 전환 (PlayerController가 조준 상태 바뀔 때마다 호출)
+	// 로컬(본인 화면)에서만 영향 있음 - 다른 플레이어가 보는 내 모습은 그대로 3인칭
+	void SetAimCameraMode(bool bAiming);
 	
 protected:
 	virtual void BeginPlay() override;
@@ -133,6 +137,11 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	class UCameraComponent* FollowCamera;
+
+	// 투사체 조준 중에만 켜지는 1인칭 카메라 - 눈높이에 직결해서 화면 중앙 = 실제 발사 방향이 되게 함
+	// (3인칭 카메라는 캐릭터 뒤에 떨어져 있어서 크로스헤어랑 실제 탄착 방향이 어긋나 보이는 문제 때문에 추가)
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	class UCameraComponent* AimCamera;
 
 	// 동상 머리 데이터 테이블 (에디터에서 DT_HeadEquip 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Equip")
