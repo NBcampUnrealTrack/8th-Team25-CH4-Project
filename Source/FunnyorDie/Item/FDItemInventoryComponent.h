@@ -70,6 +70,7 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_NotifyItemAcquired(EFDItemEffect Which);
 	
+	void SetupLocalUI();
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -126,8 +127,6 @@ protected:
 	// 알림 위젯 클래스 (에디터에서 WBP_ItemNotify 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Item|UI")
 	TSubclassOf<class UUserWidget> NotifyWidgetClass;
-
-	virtual void BeginPlay() override;
 
 private:
 	// 실제 효과 실행 (서버 전용)

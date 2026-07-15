@@ -186,6 +186,31 @@ void AFDHiderCharacter::BeginPlay()
 	}
 }
 
+void AFDHiderCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	// Super가 내부에서 Controller를 세팅하므로 이 뒤에선 IsLocallyControlled()가 유효
+	SetupLocalHiderUI();
+}
+
+void AFDHiderCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	SetupLocalHiderUI();
+}
+
+void AFDHiderCharacter::SetupLocalHiderUI()
+{
+	if (!IsLocallyControlled()) return;
+
+	// 실제 UI 생성은 인벤토리 컴포넌트가 담당 
+	// 중복 가드는 컴포넌트 쪽에 있음
+	if (ItemInventoryComp)
+	{
+		ItemInventoryComp->SetupLocalUI();
+	}
+}
+
 void AFDHiderCharacter::Server_EnterDisguise_Implementation(FName DisguiseRowName)
 {
 	// 데이터 테이블에서 위장 사물의 크기 데이터 조회

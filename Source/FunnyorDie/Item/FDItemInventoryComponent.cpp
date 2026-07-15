@@ -294,10 +294,12 @@ void UFDItemInventoryComponent::OnRep_Inventory()
 	OnInventoryChanged.Broadcast();
 }
 
-void UFDItemInventoryComponent::BeginPlay()
+void UFDItemInventoryComponent::SetupLocalUI()
 {
-	Super::BeginPlay();
-	
+	// 이미 만들어져 있으면 중복 생성 방지
+	// (PossessedBy/OnRep_PlayerState 두 경로가 겹쳐 불릴 수 있어서 필요)
+	if (InventoryWidget) return;
+
 	// 로컬 플레이어 화면에만 UI 생성
 	AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetOwner());
 	if (!Hider || !Hider->IsLocallyControlled()) return;
