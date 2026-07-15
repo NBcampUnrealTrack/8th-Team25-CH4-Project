@@ -133,6 +133,9 @@ void AFDGameMode::StartScouting() // 정찰 모드
 		ScoutTime = Settings->ScoutPhaseTime;
 	}
 
+	// 정찰 페이즈가 끝날 서버 시각을 찍어 복제 -> 클라 카운트다운이 이 값을 읽음
+	FDGameState->PhaseEndServerTime = FDGameState->GetServerWorldTimeSeconds() + ScoutTime;
+	
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, ScoutTime, false);
 }
 
@@ -177,6 +180,9 @@ void AFDGameMode::StartInGame() // 본게임 시작
 		GameTimeLimit = Settings->MainGameTimeLimit;
 	}
 
+	// 본게임 페이즈가 끝날 서버 시각을 찍어 복제
+	FDGameState->PhaseEndServerTime = FDGameState->GetServerWorldTimeSeconds() + GameTimeLimit;
+	
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::EndMatch, GameTimeLimit, false);
 }
 

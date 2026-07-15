@@ -27,6 +27,15 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly)
 	EMatchWinner Winner = EMatchWinner::None;
 	
+	// 현재 페이즈가 끝날 서버 기준 시각 - 서버가 페이즈 시작 시 한 번만 세팅해서 복제
+	// 클라는 이 값에서 현재 서버시각을 빼서 남은 시간을 스스로 계산
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	float PhaseEndServerTime = 0.f;
+
+	// 카운트다운 위젯이 읽어갈 창구
+	UFUNCTION(BlueprintPure, Category = "Match")
+	float GetRemainingPhaseTime() const;
+	
 	UFUNCTION()
 	void OnRep_CurrentPhase();
 
