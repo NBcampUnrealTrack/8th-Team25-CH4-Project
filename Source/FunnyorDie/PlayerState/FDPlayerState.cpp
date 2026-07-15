@@ -15,6 +15,8 @@ void AFDPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AFDPlayerState, bIsAlive);
 	DOREPLIFETIME(AFDPlayerState, CustomizationColors);
 	DOREPLIFETIME(AFDPlayerState, PaintSnapshot);
+	DOREPLIFETIME(AFDPlayerState, DeathServerTime);
+
 }
 
 void AFDPlayerState::OnRep_CustomizationColors()

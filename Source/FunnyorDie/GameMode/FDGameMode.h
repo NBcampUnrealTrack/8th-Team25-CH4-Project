@@ -39,6 +39,9 @@ protected:
 	void StartInGame();     // 본게임 300초
 	void EndMatch();        // 종료
 	
+	// 하이더 순위 계산 후 GameState 배열에 채움
+	void FinalizeHiderRanking();
+	
 	// 본게임 진입 시 역할별 PlayerStart로 캐릭터를 텔레포트 (술래/하이더 분리)
 	void TeleportPlayersToStarts();
 	

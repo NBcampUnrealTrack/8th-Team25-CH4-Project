@@ -201,6 +201,8 @@ void AFDGameMode::EndMatch() // 게임 끝
 		? EMatchWinner::Tagger
 		: EMatchWinner::Hider;
 
+	// 순위부터 채우고 phase를 바꿔야 순위표 위젯이 뜰 때 데이터가 이미 있음
+	FinalizeHiderRanking();
 	FDGameState->SetPhase(EMatchPhase::GameOver);
 	
 	// 게임 끝났으니 모든 플레이어 이동 잠금 (카메라는 허용)
@@ -303,6 +305,7 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 		if (AFDPlayerState* FDHiderPS = Cast<AFDPlayerState>(HiderPS))
 		{
 			FDHiderPS->bIsAlive = false;
+			FDHiderPS->DeathServerTime = FDGameState->GetServerWorldTimeSeconds();
 		}
 	}
 
@@ -314,4 +317,63 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 	{
 		EndMatch();
 	}
+}
+
+void AFDGameMode::FinalizeHiderRanking()
+{
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	// 본게임 시작 시각 역산: 종료시각 - 제한시간 = 시작시각
+	float GameTimeLimit = 300.f;
+	if (const FMatchBalanceSettings* Settings = GetBalanceSettings())
+	{
+		GameTimeLimit = Settings->MainGameTimeLimit;
+	}
+	const float GameStartTime = FDGameState->PhaseEndServerTime - GameTimeLimit;
+
+	// 하이더만 수집
+	TArray<AFDPlayerState*> Hiders;
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		if (AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS))
+		{
+			if (FDPS->RoleTag == EFDRole::Hider)
+			{
+				Hiders.Add(FDPS);
+			}
+		}
+	}
+
+	// 생존 시간 내림차순 정렬
+	Hiders.Sort([](const AFDPlayerState& A, const AFDPlayerState& B)
+	{
+		const bool bAAlive = (A.DeathServerTime < 0.f); // 안 잡힘 = 끝까지 생존
+		const bool bBAlive = (B.DeathServerTime < 0.f);
+
+		if (bAAlive != bBAlive) return bAAlive;          // 생존자가 항상 앞
+		if (bAAlive && bBAlive) return false;            // 둘 다 생존이면 순서 무관
+		return A.DeathServerTime > B.DeathServerTime;    // 둘 다 잡혔으면 늦게 잡힌 쪽이 앞
+	});
+
+	// 순위표 배열 채우기
+	FDGameState->HiderRankings.Empty();
+	for (int32 i = 0; i < Hiders.Num(); ++i)
+	{
+		AFDPlayerState* FDPS = Hiders[i];
+
+		FHiderRankEntry Entry;
+		Entry.PlayerName = FDPS->GetPlayerName();
+		Entry.Rank = i + 1;
+
+		// 생존 시간: 안 잡혔으면 전체 시간, 잡혔으면 사망시각 - 시작시각
+		Entry.SurvivalTime = (FDPS->DeathServerTime < 0.f)
+			? GameTimeLimit
+			: (FDPS->DeathServerTime - GameStartTime);
+
+		FDGameState->HiderRankings.Add(Entry);
+	}
+
+	// 서버(리슨 호스트)는 OnRep이 자동으로 안 불리므로 수동 방송
+	FDGameState->OnRep_HiderRankings();
 }

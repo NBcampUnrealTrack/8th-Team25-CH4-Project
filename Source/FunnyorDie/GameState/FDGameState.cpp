@@ -4,6 +4,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
+#include "PlayerState/FDPlayerState.h"
 
 void AFDGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -13,6 +14,8 @@ void AFDGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AFDGameState, AliveHiderCount);
 	DOREPLIFETIME(AFDGameState, Winner);
 	DOREPLIFETIME(AFDGameState, PhaseEndServerTime);
+	DOREPLIFETIME(AFDGameState, HiderRankings);
+
 }
 
 void AFDGameState::OnRep_CurrentPhase()
@@ -27,6 +30,11 @@ void AFDGameState::SetPhase(EMatchPhase NewPhase)
 {
 	CurrentPhase = NewPhase;
 	OnRep_CurrentPhase();
+}
+
+void AFDGameState::OnRep_HiderRankings()
+{
+	OnRankingsUpdated.Broadcast();
 }
 
 float AFDGameState::GetRemainingPhaseTime() const
@@ -93,5 +101,18 @@ void AFDGameState::UpdatePhaseUI()
 	{
 		CountdownWidget->RemoveFromParent();
 		CountdownWidget = nullptr;
+	}
+	
+	// 순위표: GameOver일 때만 존재
+	const bool bWantRanking = (CurrentPhase == EMatchPhase::GameOver);
+	if (bWantRanking && !RankingWidget && RankingWidgetClass)
+	{
+		RankingWidget = CreateWidget<UUserWidget>(PC, RankingWidgetClass);
+		if (RankingWidget) RankingWidget->AddToViewport();
+	}
+	else if (!bWantRanking && RankingWidget)
+	{
+		RankingWidget->RemoveFromParent();
+		RankingWidget = nullptr;
 	}
 }

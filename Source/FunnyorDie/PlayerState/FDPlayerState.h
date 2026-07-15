@@ -39,6 +39,11 @@ public:
 
 	UPROPERTY(Replicated)
 	bool bIsAlive = true;
+	
+	// 잡힌 서버 시각 
+	// -1이면 아직 안 잡힘 (=생존 중)
+	UPROPERTY(Replicated)
+	float DeathServerTime = -1.f;
 
 	// ===== 커스터마이징 필드 (신규 추가) =====
 
