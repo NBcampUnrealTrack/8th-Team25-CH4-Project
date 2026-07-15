@@ -76,10 +76,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Spare;
 
-	// 정찰 비행 중 상승/하강 인풋 액션 (Axis1D Float, 예: Space=+1 / Ctrl=-1) — 술래 전용, 정찰 단계에서만 동작
-	UPROPERTY(EditDefaultsOnly, Category = "Input")
-	UInputAction* IA_FlyVertical;
-
 	// 채색(페인팅) 인풋 액션 - 마우스 좌클릭 드래그로 그림 (CustomizationMappingContext 전용)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Paint;
@@ -111,6 +107,10 @@ private:
 	// 현재 뷰포트에 떠있는 이모트 메뉴 위젯 인스턴스
 	UPROPERTY()
 	UFDEmoteMenuWidget* EmoteMenuWidgetInstance;
+
+	// 투사체를 던진 뒤 3인칭 카메라로 복귀시키기 전 대기하는 타이머
+	// (던지자마자 바로 3인칭으로 전환하면 시점이 확 바뀌어서 멀미를 유발해 텀을 둠)
+	FTimerHandle ThrowCameraReturnTimerHandle;
 	
 	// 마우스 좌클릭 → 서버에 공격 요청
 	void Input_Attack(const FInputActionValue& Value);
@@ -127,9 +127,6 @@ private:
 	// 봐주기 키 입력 처리 → 서버에 봐주기 요청
 	void Input_Spare(const FInputActionValue& Value);
 
-	// 정찰 비행 중 상승/하강 처리 - 비행 중인 술래가 아니면 무시됨
-	void Input_FlyVertical(const FInputActionValue& Value);
-	
 	// 투명화
 	void Input_UseInvisibility(const FInputActionValue& Value);
 	
