@@ -81,12 +81,6 @@ void AFDPlayerController::SetupInputComponent()
 		EIC->BindAction(IA_Spare, ETriggerEvent::Started, this, &AFDPlayerController::Input_Spare);
 	}
 
-	// 정찰 비행 상승/하강 입력 바인딩 (술래 전용, 정찰 단계에서만 유효)
-	if (IA_FlyVertical)
-	{
-		EIC->BindAction(IA_FlyVertical, ETriggerEvent::Triggered, this, &AFDPlayerController::Input_FlyVertical);
-	}
-
 	// 페인팅 입력 바인딩 - Started(스트로크 시작) / Triggered(드래그 중) / Completed(뗌)
 	if (IA_Paint)
 	{
@@ -123,13 +117,9 @@ void AFDPlayerController::Input_Move(const FInputActionValue& Value)
 
 	const FVector2D MoveInput = Value.Get<FVector2D>();
 
-	// 정찰 비행 중인 술래는 카메라가 보는 방향(위/아래 포함)으로 그대로 날아가야 자연스러움
-	// 그 외(일반 걷기, 하이더 3인칭)는 기존처럼 Yaw만 써서 카메라 위/아래를 봐도 걷는 속도가 안 변하게 함
-	const AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(ControlledPawn);
-	const bool bFlying = Tagger && Tagger->IsFlying();
-
+	// Yaw만 써서 카메라 위/아래를 봐도 걷는 속도가 안 변하게 함 (정찰/본게임 공통, 둘 다 걷기 모드)
 	const FRotator CurrentControlRotation = GetControlRotation();
-	const FRotator MoveRotation = bFlying ? CurrentControlRotation : FRotator(0.f, CurrentControlRotation.Yaw, 0.f);
+	const FRotator MoveRotation = FRotator(0.f, CurrentControlRotation.Yaw, 0.f);
 
 	const FVector ForwardDir = FRotationMatrix(MoveRotation).GetUnitAxis(EAxis::X);
 	const FVector RightDir = FRotationMatrix(MoveRotation).GetUnitAxis(EAxis::Y);
@@ -143,13 +133,6 @@ void AFDPlayerController::Input_Jump(const FInputActionValue& Value)
 	APawn* ControlledPawn = GetPawn();
 	if (!ControlledPawn) return;
 
-	// 정찰 비행 중인 술래는 Space를 상승(IA_FlyVertical)으로 쓰고 있어서 점프는 무시해야 함
-	// (같은 Space 키라 안 막으면 Jump()가 같이 호출돼서 애님/속도가 꼬임)
-	if (const AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(ControlledPawn))
-	{
-		if (Tagger->IsFlying()) return;
-	}
-	
 	// 스페이스바 입력 시 캐릭터 점프
 	if (ACharacter* ControlledCharacter = Cast<ACharacter>(ControlledPawn))
 	{
@@ -186,8 +169,20 @@ void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 
 		Inventory->FireThrowItem();
 
-		// 던졌으니 다시 3인칭으로 복귀
-		Hider->SetAimCameraMode(false);
+		// 던지자마자 바로 3인칭으로 전환하면 시점이 확 바뀌면서 멀미를 유발한다는 피드백이 있어서
+		// 2초 정도 텀을 두고 자연스럽게 3인칭으로 복귀시킴
+		TWeakObjectPtr<AFDHiderCharacter> WeakHider(Hider);
+		GetWorldTimerManager().SetTimer(
+			ThrowCameraReturnTimerHandle,
+			[WeakHider]()
+			{
+				if (AFDHiderCharacter* HiderPtr = WeakHider.Get())
+				{
+					HiderPtr->SetAimCameraMode(false);
+				}
+			},
+			2.f,
+			false);
 	}
 }
 
@@ -196,16 +191,6 @@ void AFDPlayerController::Input_Spare(const FInputActionValue& Value)
 	// 포획 판정 UI가 떠 있는 상태에서만 의미 있는 입력이라
 	// 실제 유효성 검증은 Server_RequestSpare_Validate에서 처리됨
 	Server_RequestSpare();
-}
-
-void AFDPlayerController::Input_FlyVertical(const FInputActionValue& Value)
-{
-	// 정찰 비행 중인 술래가 아니면 상하 이동 무시 (본게임 중엔 걷기 모드라 IsFlying이 false)
-	AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn());
-	if (!Tagger || !Tagger->IsFlying()) return;
-
-	const float UpValue = Value.Get<float>();
-	Tagger->AddMovementInput(FVector::UpVector, UpValue);
 }
 
 void AFDPlayerController::Input_UseInvisibility(const FInputActionValue& Value)
@@ -232,6 +217,9 @@ void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
 	UFDItemInventoryComponent* Inventory =
 		Hider->FindComponentByClass<UFDItemInventoryComponent>();
 	if (!Inventory) return;
+
+	// 던진 뒤 대기 중이던 3인칭 복귀 타이머가 있다면 취소 (다시 조준을 시작/해제하는 거라 이전 예약은 무효)
+	GetWorldTimerManager().ClearTimer(ThrowCameraReturnTimerHandle);
 
 	Inventory->ToggleAiming();
 

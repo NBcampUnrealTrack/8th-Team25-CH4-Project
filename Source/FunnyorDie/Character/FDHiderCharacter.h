@@ -31,6 +31,9 @@ class FUNNYORDIE_API AFDHiderCharacter : public ACharacter
 	
 public:
 	AFDHiderCharacter();
+
+	// 정찰 단계 시야 차단용
+	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -63,15 +66,18 @@ public:
 	// 투사체 조준 시작/종료에 맞춰 1인칭 ↔ 3인칭 카메라 전환 (PlayerController가 조준 상태 바뀔 때마다 호출)
 	// 로컬(본인 화면)에서만 영향 있음 - 다른 플레이어가 보는 내 모습은 그대로 3인칭
 	void SetAimCameraMode(bool bAiming);
+
+	// 정찰 단계 이동 속도 버프 on/off
+	// true: 정찰 단계 - 기본 속도를 올려서 맵을 둘러볼 수 있게 함 / false: 본게임 - 기본 속도로 복귀
+	// GameMode를 건드리지 않기 위해 외부에서 호출받는 대신 Tick에서 GameState 페이즈를 직접 감지해서 스스로 호출함
+	UFUNCTION(BlueprintCallable)
+	void SetScoutSpeedBoost(bool bEnable);
 	
 protected:
 	virtual void BeginPlay() override;
-	
-	// 서버(리슨 호스트 포함): 컨트롤러가 이 폰을 소유하는 순간 호출됨
-	virtual void PossessedBy(AController* NewController) override;
 
-	// 원격 클라이언트: PlayerState가 복제로 붙는 순간 호출됨
-	virtual void OnRep_PlayerState() override;
+	// GameMode/GameState 수정 없이, 정찰 단계 진입·종료를 스스로 감지해서 SetScoutSpeedBoost를 호출하기 위함
+	virtual void Tick(float DeltaSeconds) override;
 
 	// 위장 상태 여부, 서버에서 변경 시 클라이언트에 자동 전파
 	UPROPERTY(ReplicatedUsing = OnRep_bIsDisguised)
@@ -170,6 +176,9 @@ private:
 	// 무적/속도버프 전 원래 걷기 속도 저장용 (BeginPlay에서 자동 저장됨)
 	float DefaultWalkSpeed = 600.f;
 
+	// 정찰 속도 버프가 현재 적용되어 있는지 (Tick에서 Phase 변화 감지용, 중복 호출 방지)
+	bool bScoutSpeedBoostApplied = false;
+
 	// 데이터 테이블에서 밸런스 설정값을 가져오는 헬퍼 함수
 	const FMatchBalanceSettings* GetBalanceSettings() const;
 	
@@ -186,8 +195,4 @@ private:
 
 	// 소리 정지
 	void StopNoise();
-	
-	// possess가 확정된 뒤 로컬 UI를 세팅하는 공통 진입점
-	// PossessedBy(서버)와 OnRep_PlayerState(클라) 양쪽에서 호출
-	void SetupLocalHiderUI();
 };

@@ -8,6 +8,8 @@
 #include "Camera/CameraComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
+#include "GameState/FDGameState.h"
+#include "PlayerState/FDPlayerState.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
@@ -18,6 +20,9 @@
 
 AFDHiderCharacter::AFDHiderCharacter()
 {
+	// 정찰 단계 감지를 위해 Tick 사용 (Pawn 기본값이 true긴 하지만 명시적으로 표기)
+	PrimaryActorTick.bCanEverTick = true;
+
 	// 채색 컴포넌트 생성 - Tagger 쪽 생성자에도 동일하게 추가되어 있음
 	CustomizationComp = CreateDefaultSubobject<UFDCustomizationComponent>(TEXT("CustomizationComp"));
 
@@ -76,6 +81,28 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 	// 동상 머리 장비
 	DOREPLIFETIME(AFDHiderCharacter, EquippedHeadRow);
+}
+
+bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
+{
+	// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
+	if (const AController* ViewerController = Cast<AController>(RealViewer))
+	{
+		if (const AFDPlayerState* FDViewerPS = ViewerController->GetPlayerState<AFDPlayerState>())
+		{
+			if (const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>())
+			{
+				// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
+				if (FDGameState->CurrentPhase == EMatchPhase::Scouting &&
+					FDViewerPS->RoleTag == EFDRole::Tagger)
+				{
+					return false;
+				}
+			}
+		}
+	}
+
+	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
 }
 
 void AFDHiderCharacter::Multicast_PlayNoise_Implementation(float Duration)
@@ -159,31 +186,6 @@ void AFDHiderCharacter::BeginPlay()
 	if (!EquippedHeadRow.IsNone())
 	{
 		OnRep_EquippedHeadRow();
-	}
-}
-
-void AFDHiderCharacter::PossessedBy(AController* NewController)
-{
-	Super::PossessedBy(NewController);
-	// Super가 내부에서 Controller를 세팅하므로 이 뒤에선 IsLocallyControlled()가 유효
-	SetupLocalHiderUI();
-}
-
-void AFDHiderCharacter::OnRep_PlayerState()
-{
-	Super::OnRep_PlayerState();
-	SetupLocalHiderUI();
-}
-
-void AFDHiderCharacter::SetupLocalHiderUI()
-{
-	if (!IsLocallyControlled()) return;
-
-	// 실제 UI 생성은 인벤토리 컴포넌트가 담당 
-	// 중복 가드는 컴포넌트 쪽에 있음
-	if (ItemInventoryComp)
-	{
-		ItemInventoryComp->SetupLocalUI();
 	}
 }
 
@@ -337,6 +339,43 @@ void AFDHiderCharacter::SetAimCameraMode(bool bAiming)
 	{
 		SkeletalMesh->SetOwnerNoSee(bAiming);
 	}
+}
+
+void AFDHiderCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// GameMode/GameState 파일을 건드리지 않기 위해, 정찰 단계 진입·종료를 여기서 직접 감지함
+	// 이동 속도는 서버 권한에서만 바꿔야 정상적으로 반영되므로 서버에서만 체크
+	if (!HasAuthority()) return;
+
+	const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	const bool bShouldBoost = FDGameState->CurrentPhase == EMatchPhase::Scouting;
+	if (bShouldBoost == bScoutSpeedBoostApplied) return; // 상태 변화 없으면 아무것도 안 함
+
+	bScoutSpeedBoostApplied = bShouldBoost;
+	SetScoutSpeedBoost(bShouldBoost);
+}
+
+void AFDHiderCharacter::SetScoutSpeedBoost(bool bEnable)
+{
+	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+	if (!MoveComp) return;
+
+	// 밸런스 테이블에서 정찰 속도 조회 (Tagger의 정찰 속도 필드를 그대로 공유해서 사용)
+	float ScoutSpeed = 1200.f;
+	if (const FMatchBalanceSettings* Settings = GetBalanceSettings())
+	{
+		ScoutSpeed = Settings->TaggerScoutSpeed;
+	}
+
+	// 정찰 단계: 속도 버프 적용 / 본게임 시작: BeginPlay에서 저장해둔 기본 속도로 복귀
+	MoveComp->MaxWalkSpeed = bEnable ? ScoutSpeed : DefaultWalkSpeed;
+
+	UE_LOG(LogTemp, Log, TEXT("[숨는자] 정찰 속도 버프 %s - 속도: %.1f"),
+		bEnable ? TEXT("적용") : TEXT("해제"), MoveComp->MaxWalkSpeed);
 }
 
 const FMatchBalanceSettings* AFDHiderCharacter::GetBalanceSettings() const
