@@ -6,6 +6,8 @@
 #include "GameMode/FDGameMode.h"
 #include "FDGameState.generated.h"
 
+class UUserWidget;
+
 UENUM(BlueprintType)
 enum class EMatchWinner : uint8 { None, Tagger, Hider };
 
@@ -38,7 +40,42 @@ public:
 	
 	UFUNCTION()
 	void OnRep_CurrentPhase();
+	
+	// 서버 전용: 페이즈 변경 진입점
+	// 값 대입 + 서버 자신의 수동 OnRep을 한 곳에 묶기
+	void SetPhase(EMatchPhase NewPhase);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
+	// 정찰 안내 배너 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> ScoutingBannerWidgetClass;
+
+	// 페이즈 카운트다운 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> CountdownWidgetClass;
+
+	// 현재 떠있는 위젯 인스턴스 (생성/제거 시 붙잡아둠)
+	UPROPERTY()
+	UUserWidget* ScoutingBannerWidget;
+
+	UPROPERTY()
+	UUserWidget* CountdownWidget;
+	
+	// "게임 시작!" 팝업 위젯 클래스 (에디터에서 BP_GameState에 WBP 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> StartBannerWidgetClass;
+
+	// 현재 떠있는 "게임 시작!" 팝업 인스턴스
+	UPROPERTY()
+	UUserWidget* StartBannerWidget;
+
+private:
+	// 현재 페이즈에 맞춰 phase UI를 켜고 끄는 스위치보드
+	// OnRep_CurrentPhase에서 호출
+	void UpdatePhaseUI();
+	
+	// "게임 시작!" 팝업 자동 제거 타이머
+	FTimerHandle StartBannerTimerHandle;
 };

@@ -66,7 +66,7 @@ void AFDGameMode::AssignRoles() // 롤 배정
 {
 	if (AFDGameState* FDGameState = GetGameState<AFDGameState>())
 	{
-		FDGameState->CurrentPhase = EMatchPhase::AssignRole;
+		FDGameState->SetPhase(EMatchPhase::AssignRole);
 		// GameState에 현재 Phase 설정
 		UE_LOG(LogTemp, Warning, TEXT("[GameMode] AssignRole 단계 시작"));
 	}
@@ -110,7 +110,7 @@ void AFDGameMode::StartScouting() // 정찰 모드
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
-	FDGameState->CurrentPhase = EMatchPhase::Scouting;
+	FDGameState->SetPhase(EMatchPhase::Scouting);
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] Scouting 단계 시작"));
 
 	// 캐릭터 이동 관련 코드는 헷갈릴 것 같아서 캐릭터쪽에 구현
@@ -156,7 +156,7 @@ void AFDGameMode::StartInGame() // 본게임 시작
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
-	FDGameState->CurrentPhase = EMatchPhase::InGame;
+	FDGameState->SetPhase(EMatchPhase::InGame);
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] InGame 단계 시작"));
 
 	// 생존한 숨는사람 수 저장해두기 
@@ -197,8 +197,8 @@ void AFDGameMode::EndMatch() // 게임 끝
 		? EMatchWinner::Tagger
 		: EMatchWinner::Hider;
 
-	FDGameState->CurrentPhase = EMatchPhase::GameOver;
-
+	FDGameState->SetPhase(EMatchPhase::GameOver);
+	
 	// 게임 끝났으니 모든 플레이어 이동 잠금 (카메라는 허용)
 	for (APlayerState* PS : GameState->PlayerArray)
 	{

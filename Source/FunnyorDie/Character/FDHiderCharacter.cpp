@@ -8,8 +8,6 @@
 #include "Camera/CameraComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Net/UnrealNetwork.h"
-#include "GameState/FDGameState.h"
-#include "PlayerState/FDPlayerState.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
@@ -78,28 +76,6 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 	// 동상 머리 장비
 	DOREPLIFETIME(AFDHiderCharacter, EquippedHeadRow);
-}
-
-bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
-{
-	// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
-	if (const AController* ViewerController = Cast<AController>(RealViewer))
-	{
-		if (const AFDPlayerState* FDViewerPS = ViewerController->GetPlayerState<AFDPlayerState>())
-		{
-			if (const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>())
-			{
-				// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
-				if (FDGameState->CurrentPhase == EMatchPhase::Scouting &&
-					FDViewerPS->RoleTag == EFDRole::Tagger)
-				{
-					return false;
-				}
-			}
-		}
-	}
-
-	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
 }
 
 void AFDHiderCharacter::Multicast_PlayNoise_Implementation(float Duration)

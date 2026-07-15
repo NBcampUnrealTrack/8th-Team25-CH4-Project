@@ -31,9 +31,6 @@ class FUNNYORDIE_API AFDHiderCharacter : public ACharacter
 	
 public:
 	AFDHiderCharacter();
-
-	// 정찰 단계 시야 차단용
-	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
