@@ -9,6 +9,7 @@
 #include "DrawDebugHelpers.h"
 #include "Components/DecalComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/FDItemInventoryWidget.h"
 
 UFDItemInventoryComponent::UFDItemInventoryComponent()
 {
@@ -310,20 +311,26 @@ void UFDItemInventoryComponent::SetupLocalUI()
 	// 인벤토리 UI - 계속 떠있음
 	if (InventoryWidgetClass)
 	{
-		InventoryWidget = CreateWidget<UUserWidget>(PC, InventoryWidgetClass);
+		InventoryWidget = CreateWidget<UFDItemInventoryWidget>(PC, InventoryWidgetClass);
 		if (InventoryWidget)
 		{
 			InventoryWidget->AddToViewport();
+
+			// 위젯이 폰을 역추적하지 않게 컴포넌트가 자기 자신을 직접 건네줌
+			InventoryWidget->InitializeWithInventory(this);
 		}
 	}
 
 	// 알림 UI - 계속 떠있되 평소엔 숨김 (WBP 안에서 제어)
 	if (NotifyWidgetClass)
 	{
-		NotifyWidget = CreateWidget<UUserWidget>(PC, NotifyWidgetClass);
+		NotifyWidget = CreateWidget<UFDItemInventoryWidget>(PC, NotifyWidgetClass);
 		if (NotifyWidget)
 		{
 			NotifyWidget->AddToViewport();
+
+			// 컴포넌트가 자기 자신을 직접 건네줌
+			NotifyWidget->InitializeWithInventory(this);
 		}
 	}
 }

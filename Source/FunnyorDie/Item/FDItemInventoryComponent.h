@@ -122,11 +122,11 @@ protected:
 	
 	// 인벤토리 UI 위젯 클래스 (에디터에서 WBP_ItemInventory 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Item|UI")
-	TSubclassOf<class UUserWidget> InventoryWidgetClass;
+	TSubclassOf<class UFDItemInventoryWidget> InventoryWidgetClass;
 
 	// 알림 위젯 클래스 (에디터에서 WBP_ItemNotify 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Item|UI")
-	TSubclassOf<class UUserWidget> NotifyWidgetClass;
+	TSubclassOf<class UFDItemInventoryWidget> NotifyWidgetClass;
 
 private:
 	// 실제 효과 실행 (서버 전용)
@@ -160,8 +160,8 @@ private:
 	class UUserWidget* ActiveCrosshair;
 	
 	UPROPERTY()
-	class UUserWidget* InventoryWidget;
+	class UFDItemInventoryWidget* InventoryWidget;
 
 	UPROPERTY()
-	class UUserWidget* NotifyWidget;
+	class UFDItemInventoryWidget* NotifyWidget;
 };
