@@ -9,6 +9,8 @@
 #include "Character/FDTaggerCharacter.h"
 #include "Controller/FDPlayerController.h"
 #include "Engine/DataTable.h"
+#include "GameFramework/PlayerStart.h"
+#include "EngineUtils.h"    
 
 AFDGameMode::AFDGameMode()
 {
@@ -156,6 +158,8 @@ void AFDGameMode::StartInGame() // 본게임 시작
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
+	TeleportPlayersToStarts();
+	
 	FDGameState->SetPhase(EMatchPhase::InGame);
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] InGame 단계 시작"));
 
@@ -212,6 +216,65 @@ void AFDGameMode::EndMatch() // 게임 끝
 
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 게임 종료 - 승자: %s"),
 		FDGameState->Winner == EMatchWinner::Tagger ? TEXT("Tagger") : TEXT("Hider"));
+}
+
+void AFDGameMode::TeleportPlayersToStarts()
+{
+	// --- 1단계: 레벨의 PlayerStart들을 태그별로 수집 ---
+	TArray<APlayerStart*> TaggerStarts;
+	TArray<APlayerStart*> HiderStarts;
+
+	// TActorIterator: 레벨에 배치된 특정 타입 액터를 전부 훑는 엔진 제공 반복자
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		APlayerStart* Start = *It;
+		if (!Start) continue;
+
+		// PlayerStartTag: APlayerStart가 기본 제공하는 이름표 필드 (에디터에서 지정)
+		if (Start->PlayerStartTag == TEXT("Tagger"))
+		{
+			TaggerStarts.Add(Start);
+		}
+		else if (Start->PlayerStartTag == TEXT("Hider"))
+		{
+			HiderStarts.Add(Start);
+		}
+	}
+
+	// --- 2단계: 각 캐릭터를 역할에 맞는 자리로 라운드로빈 배치 ---
+	// 같은 태그가 여러 명(하이더 다수)이면 % 연산으로 번갈아 나눠 넣는다
+	int32 TaggerIdx = 0;
+	int32 HiderIdx = 0;
+
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS) continue;
+
+		APawn* Pawn = FDPS->GetPawn();
+		if (!Pawn) continue;
+
+		APlayerStart* Target = nullptr;
+
+		if (FDPS->RoleTag == EFDRole::Tagger && TaggerStarts.Num() > 0)
+		{
+			Target = TaggerStarts[TaggerIdx % TaggerStarts.Num()];
+			++TaggerIdx;
+		}
+		else if (FDPS->RoleTag == EFDRole::Hider && HiderStarts.Num() > 0)
+		{
+			Target = HiderStarts[HiderIdx % HiderStarts.Num()];
+			++HiderIdx;
+		}
+
+		if (!Target) continue;
+
+		// 텔레포트: 서버에서 옮기면 복제로 전 클라에 동기화된다.
+		// Sweep=false → 경로 충돌 검사 없이 목적지에 바로 꽂는다.
+		// (텔레포트는 순간이동이라 경로를 훑을 필요가 없음. true면 오히려 목적지 못 감)
+		Pawn->SetActorLocation(Target->GetActorLocation(), false);
+		Pawn->SetActorRotation(Target->GetActorRotation());
+	}
 }
 
 void AFDGameMode::RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter)

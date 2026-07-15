@@ -18,6 +18,7 @@ public:
 
 	virtual void PostLogin(APlayerController* NewPlayer) override; // 접속 처리
 	virtual void StartPlay() override;
+	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
 	TSubclassOf<ACharacter> TaggerClass;
@@ -37,6 +38,10 @@ protected:
 	void StartScouting();   // 정찰 60초
 	void StartInGame();     // 본게임 300초
 	void EndMatch();        // 종료
+	
+	// 본게임 진입 시 역할별 PlayerStart로 캐릭터를 텔레포트 (술래/하이더 분리)
+	void TeleportPlayersToStarts();
+	
 public:
 	void RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter); // 포획 판정 시작
 	// 태그가 Hider, Tagger라서 character 변수명은 뒤에 character 붙임
