@@ -41,7 +41,7 @@ AFDHiderCharacter::AFDHiderCharacter()
 	// 3인칭 카메라 - SpringArm이 마우스 회전을 받고, 카메라는 그 끝에 그대로 매달림
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(GetCapsuleComponent());
-	CameraBoom->TargetArmLength = 350.f;
+	CameraBoom->TargetArmLength = ThirdPersonArmLength; // 기본 3인칭으로 시작
 	CameraBoom->SetRelativeLocation(FVector(0.f, 0.f, 60.f));
 	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->bDoCollisionTest = true; // 벽에 카메라 파고들지 않게 자동으로 당겨줌
@@ -341,9 +341,44 @@ void AFDHiderCharacter::SetAimCameraMode(bool bAiming)
 	}
 }
 
+void AFDHiderCharacter::ToggleViewMode()
+{
+	// 로컬(본인) 화면에서만 의미 있음 - 실제 보간 처리는 Tick에서 IsLocallyControlled() 체크 후 수행됨
+	if (!IsLocallyControlled()) return;
+
+	// 투사체 조준 중엔 AimCamera가 우선 적용되므로 자유 시점 전환은 무시
+	if (ItemInventoryComp && ItemInventoryComp->IsAiming())
+	{
+		return;
+	}
+
+	bIsFirstPersonView = !bIsFirstPersonView;
+
+	UE_LOG(LogTemp, Log, TEXT("[숨는자] 시점 전환 - %s"), bIsFirstPersonView ? TEXT("1인칭") : TEXT("3인칭"));
+}
+
 void AFDHiderCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// 자유 시점 전환(1인칭 ↔ 3인칭) - 로컬(본인) 화면에서만 의미 있는 연출
+	// 조준 중엔 AimCamera가 이미 우선 적용되어 FollowCamera가 꺼져있으므로, 그럴 땐 붐 길이를 건드리지 않음
+	if (IsLocallyControlled() && CameraBoom && FollowCamera && FollowCamera->IsActive())
+	{
+		const float TargetArmLength = bIsFirstPersonView ? 0.f : ThirdPersonArmLength;
+		CameraBoom->TargetArmLength = FMath::FInterpTo(
+			CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, ViewTransitionSpeed);
+
+		// 1인칭에 거의 다 왔으면(붐 길이가 거의 0이면) 본인 시점에서만 메시를 숨김
+		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+		{
+			const bool bShouldHideMesh = CameraBoom->TargetArmLength < 10.f;
+			if (SkeletalMesh->bOwnerNoSee != bShouldHideMesh)
+			{
+				SkeletalMesh->SetOwnerNoSee(bShouldHideMesh);
+			}
+		}
+	}
 
 	// GameMode/GameState 파일을 건드리지 않기 위해, 정찰 단계 진입·종료를 여기서 직접 감지함
 	// 이동 속도는 서버 권한에서만 바꿔야 정상적으로 반영되므로 서버에서만 체크
