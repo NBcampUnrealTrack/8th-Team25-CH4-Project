@@ -9,6 +9,9 @@
 #include "Character/FDTaggerCharacter.h"
 #include "Controller/FDPlayerController.h"
 #include "Engine/DataTable.h"
+#include "GameFramework/PlayerStart.h"
+#include "EngineUtils.h"    
+#include "GameInstance/FDGameInstance.h"
 
 AFDGameMode::AFDGameMode()
 {
@@ -54,19 +57,83 @@ UClass* AFDGameMode::GetDefaultPawnClassForController_Implementation(AController
 	// DefaultPawnClass(=nullptr)를 리턴해서 스폰 안됨
 }
 
-void AFDGameMode::StartPlay() // 게임 시작
+void AFDGameMode::StartPlay()
 {
 	Super::StartPlay();
 
-	// 맵 옮겨오고 5초뒤에 Role 배정 시작
-	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::AssignRoles, 5.f, false);
+	// 로비에서 실어보낸 목표 인원 회수
+	if (const UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+	{
+		ExpectedPlayerCount = GI->ExpectedPlayerCount;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 목표 인원 %d명 — 전원 재접속 대기 시작"), ExpectedPlayerCount);
+
+	PlayerWaitElapsed = 0.f;
+
+	// 고정 5초 대신 전원 모일 때까지 0.5초 간격으로 확인
+	// SetTimer의 마지막 인자 true = 반복 타이머 (하드 트래블 재접속을 계속 폴링)
+	GetWorldTimerManager().SetTimer(
+		WaitTimerHandle, this, &AFDGameMode::WaitForPlayers,
+		PlayerWaitInterval, true);
+}
+
+void AFDGameMode::WaitForPlayers()
+{
+	PlayerWaitElapsed += PlayerWaitInterval;
+
+	const int32 Current = GameState->PlayerArray.Num();
+	const bool bEveryoneHere = (ExpectedPlayerCount > 0) && (Current >= ExpectedPlayerCount);
+	const bool bTimedOut     = (PlayerWaitElapsed >= MaxPlayerWaitTime);
+
+	// 아직 덜 모였고 타임아웃도 아니면 다음 폴링까지 그냥 대기
+	if (!bEveryoneHere && !bTimedOut)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[GameMode] 대기 중... %d/%d"), Current, ExpectedPlayerCount);
+		return;
+	}
+	
+	if (bEveryoneHere)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 전원 %d명 집합 완료 — 매치 시작"), Current);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 대기 타임아웃 — %d/%d명으로 강제 시작"), Current, ExpectedPlayerCount);
+	}
+
+	// 시작 처리
+	
+	// 이 시점 이후 접속은 PreLogin에서 거부
+	bRosterLocked = true;
+	
+	// 반복 타이머 정지
+	GetWorldTimerManager().ClearTimer(WaitTimerHandle);
+	
+	// 역할 배정
+	AssignRoles();
+}
+
+void AFDGameMode::PreLogin(const FString& Options, const FString& Address,
+						   const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	// 로스터가 잠긴 뒤(=매치 시작 후) 들어오려는 접속은 거부
+	if (bRosterLocked)
+	{
+		// ErrorMessage에 값이 채워지면 엔진이 이 접속을 승인하지 않음
+		ErrorMessage = TEXT("Match already in progress");
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 매치 진행 중 — 난입 거부: %s"), *Address);
+		return;
+	}
+
+	// 잠기기 전(=로비 인원 재접속 중)이면 정상 승인
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 }
 
 void AFDGameMode::AssignRoles() // 롤 배정
 {
 	if (AFDGameState* FDGameState = GetGameState<AFDGameState>())
 	{
-		FDGameState->CurrentPhase = EMatchPhase::AssignRole;
+		FDGameState->SetPhase(EMatchPhase::AssignRole);
 		// GameState에 현재 Phase 설정
 		UE_LOG(LogTemp, Warning, TEXT("[GameMode] AssignRole 단계 시작"));
 	}
@@ -110,7 +177,7 @@ void AFDGameMode::StartScouting() // 정찰 모드
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
-	FDGameState->CurrentPhase = EMatchPhase::Scouting;
+	FDGameState->SetPhase(EMatchPhase::Scouting);
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] Scouting 단계 시작"));
 
 	// 캐릭터 이동 관련 코드는 헷갈릴 것 같아서 캐릭터쪽에 구현
@@ -133,6 +200,9 @@ void AFDGameMode::StartScouting() // 정찰 모드
 		ScoutTime = Settings->ScoutPhaseTime;
 	}
 
+	// 정찰 페이즈가 끝날 서버 시각을 찍어 복제 -> 클라 카운트다운이 이 값을 읽음
+	FDGameState->PhaseEndServerTime = FDGameState->GetServerWorldTimeSeconds() + ScoutTime;
+	
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::StartInGame, ScoutTime, false);
 }
 
@@ -153,7 +223,9 @@ void AFDGameMode::StartInGame() // 본게임 시작
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
-	FDGameState->CurrentPhase = EMatchPhase::InGame;
+	TeleportPlayersToStarts();
+	
+	FDGameState->SetPhase(EMatchPhase::InGame);
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] InGame 단계 시작"));
 
 	// 생존한 숨는사람 수 저장해두기 
@@ -177,6 +249,9 @@ void AFDGameMode::StartInGame() // 본게임 시작
 		GameTimeLimit = Settings->MainGameTimeLimit;
 	}
 
+	// 본게임 페이즈가 끝날 서버 시각을 찍어 복제
+	FDGameState->PhaseEndServerTime = FDGameState->GetServerWorldTimeSeconds() + GameTimeLimit;
+	
 	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::EndMatch, GameTimeLimit, false);
 }
 
@@ -191,8 +266,10 @@ void AFDGameMode::EndMatch() // 게임 끝
 		? EMatchWinner::Tagger
 		: EMatchWinner::Hider;
 
-	FDGameState->CurrentPhase = EMatchPhase::GameOver;
-
+	// 순위부터 채우고 phase를 바꿔야 순위표 위젯이 뜰 때 데이터가 이미 있음
+	FinalizeHiderRanking();
+	FDGameState->SetPhase(EMatchPhase::GameOver);
+	
 	// 게임 끝났으니 모든 플레이어 이동 잠금 (카메라는 허용)
 	for (APlayerState* PS : GameState->PlayerArray)
 	{
@@ -206,6 +283,65 @@ void AFDGameMode::EndMatch() // 게임 끝
 
 	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 게임 종료 - 승자: %s"),
 		FDGameState->Winner == EMatchWinner::Tagger ? TEXT("Tagger") : TEXT("Hider"));
+}
+
+void AFDGameMode::TeleportPlayersToStarts()
+{
+	// --- 1단계: 레벨의 PlayerStart들을 태그별로 수집 ---
+	TArray<APlayerStart*> TaggerStarts;
+	TArray<APlayerStart*> HiderStarts;
+
+	// TActorIterator: 레벨에 배치된 특정 타입 액터를 전부 훑는 엔진 제공 반복자
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		APlayerStart* Start = *It;
+		if (!Start) continue;
+
+		// PlayerStartTag: APlayerStart가 기본 제공하는 이름표 필드 (에디터에서 지정)
+		if (Start->PlayerStartTag == TEXT("Tagger"))
+		{
+			TaggerStarts.Add(Start);
+		}
+		else if (Start->PlayerStartTag == TEXT("Hider"))
+		{
+			HiderStarts.Add(Start);
+		}
+	}
+
+	// --- 2단계: 각 캐릭터를 역할에 맞는 자리로 라운드로빈 배치 ---
+	// 같은 태그가 여러 명(하이더 다수)이면 % 연산으로 번갈아 나눠 넣는다
+	int32 TaggerIdx = 0;
+	int32 HiderIdx = 0;
+
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS) continue;
+
+		APawn* Pawn = FDPS->GetPawn();
+		if (!Pawn) continue;
+
+		APlayerStart* Target = nullptr;
+
+		if (FDPS->RoleTag == EFDRole::Tagger && TaggerStarts.Num() > 0)
+		{
+			Target = TaggerStarts[TaggerIdx % TaggerStarts.Num()];
+			++TaggerIdx;
+		}
+		else if (FDPS->RoleTag == EFDRole::Hider && HiderStarts.Num() > 0)
+		{
+			Target = HiderStarts[HiderIdx % HiderStarts.Num()];
+			++HiderIdx;
+		}
+
+		if (!Target) continue;
+
+		// 텔레포트: 서버에서 옮기면 복제로 전 클라에 동기화된다.
+		// Sweep=false → 경로 충돌 검사 없이 목적지에 바로 꽂는다.
+		// (텔레포트는 순간이동이라 경로를 훑을 필요가 없음. true면 오히려 목적지 못 감)
+		Pawn->SetActorLocation(Target->GetActorLocation(), false);
+		Pawn->SetActorRotation(Target->GetActorRotation());
+	}
 }
 
 void AFDGameMode::RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter)
@@ -234,6 +370,7 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 		if (AFDPlayerState* FDHiderPS = Cast<AFDPlayerState>(HiderPS))
 		{
 			FDHiderPS->bIsAlive = false;
+			FDHiderPS->DeathServerTime = FDGameState->GetServerWorldTimeSeconds();
 		}
 	}
 
@@ -245,4 +382,63 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 	{
 		EndMatch();
 	}
+}
+
+void AFDGameMode::FinalizeHiderRanking()
+{
+	AFDGameState* FDGameState = GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	// 본게임 시작 시각 역산: 종료시각 - 제한시간 = 시작시각
+	float GameTimeLimit = 300.f;
+	if (const FMatchBalanceSettings* Settings = GetBalanceSettings())
+	{
+		GameTimeLimit = Settings->MainGameTimeLimit;
+	}
+	const float GameStartTime = FDGameState->PhaseEndServerTime - GameTimeLimit;
+
+	// 하이더만 수집
+	TArray<AFDPlayerState*> Hiders;
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		if (AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS))
+		{
+			if (FDPS->RoleTag == EFDRole::Hider)
+			{
+				Hiders.Add(FDPS);
+			}
+		}
+	}
+
+	// 생존 시간 내림차순 정렬
+	Hiders.Sort([](const AFDPlayerState& A, const AFDPlayerState& B)
+	{
+		const bool bAAlive = (A.DeathServerTime < 0.f); // 안 잡힘 = 끝까지 생존
+		const bool bBAlive = (B.DeathServerTime < 0.f);
+
+		if (bAAlive != bBAlive) return bAAlive;          // 생존자가 항상 앞
+		if (bAAlive && bBAlive) return false;            // 둘 다 생존이면 순서 무관
+		return A.DeathServerTime > B.DeathServerTime;    // 둘 다 잡혔으면 늦게 잡힌 쪽이 앞
+	});
+
+	// 순위표 배열 채우기
+	FDGameState->HiderRankings.Empty();
+	for (int32 i = 0; i < Hiders.Num(); ++i)
+	{
+		AFDPlayerState* FDPS = Hiders[i];
+
+		FHiderRankEntry Entry;
+		Entry.PlayerName = FDPS->GetPlayerName();
+		Entry.Rank = i + 1;
+
+		// 생존 시간: 안 잡혔으면 전체 시간, 잡혔으면 사망시각 - 시작시각
+		Entry.SurvivalTime = (FDPS->DeathServerTime < 0.f)
+			? GameTimeLimit
+			: (FDPS->DeathServerTime - GameStartTime);
+
+		FDGameState->HiderRankings.Add(Entry);
+	}
+
+	// 서버(리슨 호스트)는 OnRep이 자동으로 안 불리므로 수동 방송
+	FDGameState->OnRep_HiderRankings();
 }

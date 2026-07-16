@@ -47,6 +47,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "FD|Session")
 	EFDSessionStatus GetSessionStatus() const { return CurrentStatus; }
+	
+	// 매치 시작 시점의 로비 인원 수.
+	int32 ExpectedPlayerCount = 0;
 
 protected:
 	// 호스트가 CreateSession 성공 후 ServerTravel할 맵

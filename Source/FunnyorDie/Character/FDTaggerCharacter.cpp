@@ -7,15 +7,20 @@
 #include "Components/SphereComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
+#include "GameState/FDGameState.h"
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Net/UnrealNetwork.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
+	// 정찰 단계 감지를 위해 Tick 사용 (Pawn 기본값이 true긴 하지만 명시적으로 표기)
+	PrimaryActorTick.bCanEverTick = true;
+
 	// 포획 판정용 구체 콜리전 생성 및 루트에 부착
 	CaptureCollision = CreateDefaultSubobject<USphereComponent>(TEXT("CaptureCollision"));
 	CaptureCollision->SetupAttachment(RootComponent);
@@ -29,13 +34,20 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 	// 이모트 컴포넌트 생성 - 마찬가지로 Hider 쪽에도 동일하게 추가됨
 	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
 
-	// 1인칭 카메라 - 캡슐 눈높이(BaseEyeHeight)에 바로 부착, 마우스 회전을 그대로 카메라에 반영
-	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
-	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
-	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
-	FirstPersonCamera->bUsePawnControlRotation = true;
+	// 카메라 붐 - 눈높이에 부착, TargetArmLength를 보간시켜 1인칭↔3인칭을 자연스럽게 오갈 수 있게 함
+	// 기본값은 3인칭(ThirdPersonArmLength)이고, IA_ToggleView 입력 시 0(1인칭)까지 부드럽게 줄어듦
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(GetCapsuleComponent());
+	CameraBoom->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->bDoCollisionTest = true; // 벽에 카메라 파고들지 않게 자동으로 당겨줌
+	CameraBoom->TargetArmLength = ThirdPersonArmLength; // 기본 3인칭으로 시작
 
-	// 1인칭이라 몸 자체가 마우스 좌우 회전을 따라가야 함 (3인칭 기본값인 이동방향 정렬은 꺼둠)
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false; // 붐이 이미 회전을 받았으니 카메라 자체는 추가 회전 불필요
+
+	// 마우스 좌우 회전을 몸이 그대로 따라가야 함 (1인칭이든 3인칭이든 조준 방향과 몸 방향을 일치시키기 위함)
 	bUseControllerRotationYaw = true;
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
@@ -47,12 +59,54 @@ void AFDTaggerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 기본 시점은 3인칭이라 메시를 미리 숨길 필요 없음
+	// 1인칭에 가까워졌을 때 메시를 숨기는 처리는 Tick에서 카메라 붐 길이를 보고 동적으로 처리함
+	// (SetOwnerNoSee는 본인 화면에서만 메시를 숨기고, 다른 클라이언트 화면에는 그대로 보임)
+
 	// 서버에서만 Overlap 이벤트 바인딩 (포획 판정은 서버 권한으로만 실행)
 	if (HasAuthority())
 	{
 		CaptureCollision->OnComponentBeginOverlap.AddDynamic(
 			this, &AFDTaggerCharacter::OnCaptureCollisionOverlap);
 	}
+}
+
+void AFDTaggerCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// 1인칭 ↔ 3인칭 시점 전환 - 로컬(본인) 화면에서만 의미 있는 연출이라 다른 클라이언트에 영향 없음
+	// 카메라 붐 길이를 목표값까지 매 프레임 보간해서 순간적으로 튀지 않고 자연스럽게 줌 인/아웃되게 함
+	if (IsLocallyControlled() && CameraBoom)
+	{
+		const float TargetArmLength = bIsFirstPersonView ? 0.f : ThirdPersonArmLength;
+		CameraBoom->TargetArmLength = FMath::FInterpTo(
+			CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, ViewTransitionSpeed);
+
+		// 1인칭에 거의 다 왔으면(붐 길이가 거의 0이면) 본인 시점에서만 메시를 숨김
+		// - 다른 클라이언트 화면에는 영향 없음 (SetOwnerNoSee는 본인 전용)
+		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+		{
+			const bool bShouldHideMesh = CameraBoom->TargetArmLength < 10.f;
+			if (SkeletalMesh->bOwnerNoSee != bShouldHideMesh)
+			{
+				SkeletalMesh->SetOwnerNoSee(bShouldHideMesh);
+			}
+		}
+	}
+
+	// GameMode/GameState 파일을 건드리지 않기 위해, 정찰 단계 진입·종료를 여기서 직접 감지함
+	// (Hider 쪽과 동일한 패턴) - 이동 속도는 서버 권한에서만 바꿔야 정상적으로 반영되므로 서버에서만 체크
+	if (!HasAuthority()) return;
+
+	const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	const bool bShouldBoost = FDGameState->CurrentPhase == EMatchPhase::Scouting;
+	if (bShouldBoost == bScoutModeApplied) return; // 상태 변화 없으면 아무것도 안 함
+
+	bScoutModeApplied = bShouldBoost;
+	SetScoutingMode(bShouldBoost);
 }
 
 
@@ -109,7 +163,7 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Movement) return;
 
-	// 밸런스 테이블에서 속도 값 조회
+	// 밸런스 테이블에서 속도 값 조회 (플라이 관전 방식은 삭제 - 이제 걷기 속도만 올려서 맵을 둘러봄)
 	float ScoutSpeed = 1200.f;
 	float NormalSpeed = 600.f;
 	if (BalanceDataTable)
@@ -122,37 +176,15 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 		}
 	}
 
-	if (bEnable)
-	{
-		// 정찰 단계: 걷기 대신 자유비행 모드로 전환해서 하늘에서 맵을 둘러볼 수 있게 함
-		Movement->SetMovementMode(MOVE_Flying);
-		Movement->MaxFlySpeed = ScoutSpeed;
-
-		// 벽/바닥에 막히지 않고 자유롭게 돌아다니게 하려면 콜리전도 꺼야 함
-		// (그냥 Flying만 켜면 벽은 못 뚫고 위/아래로만 자유로워짐 - 기획에 따라 아래 줄은 빼도 됨)
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Ignore);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
-	}
-	else
-	{
-		// 본게임 시작: 다시 걷기 모드로 복귀, 콜리전도 원상복구
-		Movement->SetMovementMode(MOVE_Walking);
-		Movement->MaxWalkSpeed = NormalSpeed;
-
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
-	}
-	
-	Multicast_SetMeshVisibility(!bEnable);
-	// 관전 모드 진입하면 메시 숨겨야 하니까 반대값 전달 (false가 전달됨)
+	Movement->MaxWalkSpeed = bEnable ? ScoutSpeed : NormalSpeed;
 }
 
-bool AFDTaggerCharacter::IsFlying() const
+void AFDTaggerCharacter::ToggleViewMode()
 {
-	const UCharacterMovementComponent* Movement = GetCharacterMovement();
-	return Movement && Movement->IsFlying();
+	// 로컬(본인) 화면에서만 의미 있음 - 실제 보간 처리는 Tick에서 IsLocallyControlled() 체크 후 수행됨
+	bIsFirstPersonView = !bIsFirstPersonView;
+
+	UE_LOG(LogTemp, Log, TEXT("[술래] 시점 전환 - %s"), bIsFirstPersonView ? TEXT("1인칭") : TEXT("3인칭"));
 }
 
 void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -160,11 +192,6 @@ void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	
 	DOREPLIFETIME(AFDTaggerCharacter, bIsStunned);
-}
-
-void AFDTaggerCharacter::Multicast_SetMeshVisibility_Implementation(bool bVisible)
-{
-	GetMesh()->SetVisibility(bVisible, true);
 }
 
 void AFDTaggerCharacter::StartCaptureSequence(ACharacter* TargetHider)
