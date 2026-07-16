@@ -31,9 +31,6 @@ class FUNNYORDIE_API AFDHiderCharacter : public ACharacter
 	
 public:
 	AFDHiderCharacter();
-
-	// 정찰 단계 시야 차단용
-	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -82,6 +79,12 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// 서버(리슨 호스트 포함): 컨트롤러가 이 폰을 소유하는 순간 호출됨
+	virtual void PossessedBy(AController* NewController) override;
+
+	// 원격 클라이언트: PlayerState가 복제로 붙는 순간 호출됨
+	virtual void OnRep_PlayerState() override;
+	
 	// GameMode/GameState 수정 없이, 정찰 단계 진입·종료를 스스로 감지해서 SetScoutSpeedBoost를 호출하기 위함
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -213,4 +216,8 @@ private:
 
 	// 소리 정지
 	void StopNoise();
+	
+	// possess가 확정된 뒤 로컬 UI를 세팅하는 공통 진입점
+	// PossessedBy(서버)와 OnRep_PlayerState(클라) 양쪽에서 호출
+	void SetupLocalHiderUI();
 };

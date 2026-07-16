@@ -83,28 +83,6 @@ void AFDHiderCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AFDHiderCharacter, EquippedHeadRow);
 }
 
-bool AFDHiderCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
-{
-	// 액터를 컨트롤러로 캐스팅 (액터는 playerstate를 바로 호출 못하는 것 같음 에러 발생해서 변경)
-	if (const AController* ViewerController = Cast<AController>(RealViewer))
-	{
-		if (const AFDPlayerState* FDViewerPS = ViewerController->GetPlayerState<AFDPlayerState>())
-		{
-			if (const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>())
-			{
-				// 현재 Phase가 정찰 상태고 술래면 return false 한다는 얘기 (술래가 hider 캐릭터 못보게)
-				if (FDGameState->CurrentPhase == EMatchPhase::Scouting &&
-					FDViewerPS->RoleTag == EFDRole::Tagger)
-				{
-					return false;
-				}
-			}
-		}
-	}
-
-	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
-}
-
 void AFDHiderCharacter::Multicast_PlayNoise_Implementation(float Duration)
 {
 	if (!NoiseSound)
@@ -186,6 +164,31 @@ void AFDHiderCharacter::BeginPlay()
 	if (!EquippedHeadRow.IsNone())
 	{
 		OnRep_EquippedHeadRow();
+	}
+}
+
+void AFDHiderCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	// Super가 내부에서 Controller를 세팅하므로 이 뒤에선 IsLocallyControlled()가 유효
+	SetupLocalHiderUI();
+}
+
+void AFDHiderCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	SetupLocalHiderUI();
+}
+
+void AFDHiderCharacter::SetupLocalHiderUI()
+{
+	if (!IsLocallyControlled()) return;
+
+	// 실제 UI 생성은 인벤토리 컴포넌트가 담당 
+	// 중복 가드는 컴포넌트 쪽에 있음
+	if (ItemInventoryComp)
+	{
+		ItemInventoryComp->SetupLocalUI();
 	}
 }
 
