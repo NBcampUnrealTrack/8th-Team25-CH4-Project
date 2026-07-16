@@ -91,6 +91,10 @@ private:
 	// 투사체 사용 키 (X) - 하이더 전용
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_UseThrowItem;
+
+	// 시점 전환 키 (1인칭 ↔ 3인칭, 기본값 3인칭) - 술래/하이더 공용
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	UInputAction* IA_ToggleView;
 	
 	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당) -> 부모클래스 변경
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -132,6 +136,9 @@ private:
 	
 	// 투사체
 	void Input_UseThrowItem(const FInputActionValue& Value);
+
+	// 시점 전환 입력 처리 - 술래/하이더 공용 (조종 중인 폰 타입에 맞춰 알아서 분기됨)
+	void Input_ToggleView(const FInputActionValue& Value);
 
 	// 페인팅 입력 처리 - Started/Triggered/Completed 각각 스트로크 시작/중간/끝에 대응
 	void Input_PaintStart(const FInputActionValue& Value);

@@ -67,6 +67,12 @@ public:
 	// 로컬(본인 화면)에서만 영향 있음 - 다른 플레이어가 보는 내 모습은 그대로 3인칭
 	void SetAimCameraMode(bool bAiming);
 
+	// 자유 시점 전환 토글 - 1인칭 ↔ 3인칭 (PlayerController의 IA_ToggleView 입력 시 호출)
+	// 조준 중(SetAimCameraMode)에는 AimCamera가 우선이라 이 토글은 무시됨
+	// 로컬(본인 화면)에서만 영향 있음
+	UFUNCTION(BlueprintCallable)
+	void ToggleViewMode();
+
 	// 정찰 단계 이동 속도 버프 on/off
 	// true: 정찰 단계 - 기본 속도를 올려서 맵을 둘러볼 수 있게 함 / false: 본게임 - 기본 속도로 복귀
 	// GameMode를 건드리지 않기 위해 외부에서 호출받는 대신 Tick에서 GameState 페이즈를 직접 감지해서 스스로 호출함
@@ -151,6 +157,18 @@ protected:
 	// (3인칭 카메라는 캐릭터 뒤에 떨어져 있어서 크로스헤어랑 실제 탄착 방향이 어긋나 보이는 문제 때문에 추가)
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	class UCameraComponent* AimCamera;
+
+	// 3인칭일 때 카메라 붐 길이 (에디터에서 조정 가능) - 자유 시점 전환 시 이 값과 0 사이를 보간
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float ThirdPersonArmLength = 350.f;
+
+	// 시점 전환 보간 속도 (클수록 빨리 전환됨)
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float ViewTransitionSpeed = 8.f;
+
+	// 자유 시점 전환의 목표 상태가 1인칭인지 여부 (기본값 false = 3인칭 시작)
+	// 조준용 AimCamera와는 별개의 상태값
+	bool bIsFirstPersonView = false;
 
 	// 동상 머리 데이터 테이블 (에디터에서 DT_HeadEquip 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Equip")
