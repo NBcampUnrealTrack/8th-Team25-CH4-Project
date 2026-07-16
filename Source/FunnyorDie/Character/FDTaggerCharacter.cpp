@@ -10,12 +10,16 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
+#include "GameState/FDGameState.h"
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Net/UnrealNetwork.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
+	// 정찰 단계 감지를 위해 Tick 사용 (Pawn 기본값이 true긴 하지만 명시적으로 표기)
+	PrimaryActorTick.bCanEverTick = true;
+
 	// 포획 판정용 구체 콜리전 생성 및 루트에 부착
 	CaptureCollision = CreateDefaultSubobject<USphereComponent>(TEXT("CaptureCollision"));
 	CaptureCollision->SetupAttachment(RootComponent);
@@ -47,12 +51,42 @@ void AFDTaggerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 술래는 항상 1인칭이라 카메라가 캡슐/눈높이에 바짝 붙어있어서
+	// 자기 몸통(어깨, 머리 등) 메시가 카메라 근평면을 뚫고 시야를 가리는 문제가 있었음
+	// SetOwnerNoSee는 본인 화면에서만 메시를 숨기고, 다른 클라이언트 화면에는 그대로 보임
+	// (Hider의 조준 카메라 전환 때 쓰는 방식과 동일)
+	if (IsLocallyControlled())
+	{
+		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+		{
+			SkeletalMesh->SetOwnerNoSee(true);
+		}
+	}
+
 	// 서버에서만 Overlap 이벤트 바인딩 (포획 판정은 서버 권한으로만 실행)
 	if (HasAuthority())
 	{
 		CaptureCollision->OnComponentBeginOverlap.AddDynamic(
 			this, &AFDTaggerCharacter::OnCaptureCollisionOverlap);
 	}
+}
+
+void AFDTaggerCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// GameMode/GameState 파일을 건드리지 않기 위해, 정찰 단계 진입·종료를 여기서 직접 감지함
+	// (Hider 쪽과 동일한 패턴) - 이동 속도는 서버 권한에서만 바꿔야 정상적으로 반영되므로 서버에서만 체크
+	if (!HasAuthority()) return;
+
+	const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	const bool bShouldBoost = FDGameState->CurrentPhase == EMatchPhase::Scouting;
+	if (bShouldBoost == bScoutModeApplied) return; // 상태 변화 없으면 아무것도 안 함
+
+	bScoutModeApplied = bShouldBoost;
+	SetScoutingMode(bShouldBoost);
 }
 
 
@@ -109,7 +143,7 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!Movement) return;
 
-	// 밸런스 테이블에서 속도 값 조회
+	// 밸런스 테이블에서 속도 값 조회 (플라이 관전 방식은 삭제 - 이제 걷기 속도만 올려서 맵을 둘러봄)
 	float ScoutSpeed = 1200.f;
 	float NormalSpeed = 600.f;
 	if (BalanceDataTable)
@@ -122,37 +156,7 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 		}
 	}
 
-	if (bEnable)
-	{
-		// 정찰 단계: 걷기 대신 자유비행 모드로 전환해서 하늘에서 맵을 둘러볼 수 있게 함
-		Movement->SetMovementMode(MOVE_Flying);
-		Movement->MaxFlySpeed = ScoutSpeed;
-
-		// 벽/바닥에 막히지 않고 자유롭게 돌아다니게 하려면 콜리전도 꺼야 함
-		// (그냥 Flying만 켜면 벽은 못 뚫고 위/아래로만 자유로워짐 - 기획에 따라 아래 줄은 빼도 됨)
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Ignore);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
-	}
-	else
-	{
-		// 본게임 시작: 다시 걷기 모드로 복귀, 콜리전도 원상복구
-		Movement->SetMovementMode(MOVE_Walking);
-		Movement->MaxWalkSpeed = NormalSpeed;
-
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
-		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
-	}
-	
-	Multicast_SetMeshVisibility(!bEnable);
-	// 관전 모드 진입하면 메시 숨겨야 하니까 반대값 전달 (false가 전달됨)
-}
-
-bool AFDTaggerCharacter::IsFlying() const
-{
-	const UCharacterMovementComponent* Movement = GetCharacterMovement();
-	return Movement && Movement->IsFlying();
+	Movement->MaxWalkSpeed = bEnable ? ScoutSpeed : NormalSpeed;
 }
 
 void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -160,11 +164,6 @@ void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	
 	DOREPLIFETIME(AFDTaggerCharacter, bIsStunned);
-}
-
-void AFDTaggerCharacter::Multicast_SetMeshVisibility_Implementation(bool bVisible)
-{
-	GetMesh()->SetVisibility(bVisible, true);
 }
 
 void AFDTaggerCharacter::StartCaptureSequence(ACharacter* TargetHider)

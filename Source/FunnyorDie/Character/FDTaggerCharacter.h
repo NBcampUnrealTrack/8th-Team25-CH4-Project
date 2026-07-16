@@ -26,6 +26,9 @@ public:
 	
 	virtual void BeginPlay() override;
 
+	// GameMode/GameState 수정 없이, 정찰 단계 진입·종료를 스스로 감지해서 SetScoutingMode를 호출하기 위함
+	virtual void Tick(float DeltaSeconds) override;
+
 	void ForceOut();       // 아웃 선택시 호출되는 함수
 	void RequestSpare();   // 아웃 선택시 호출되는 함수
 	
@@ -43,13 +46,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_TryCapture();
 
-	// 관전 모드 (GameMode가 Phase 변화에 맞춰 호출)
-	// true: 정찰 단계 - 하늘을 자유비행하며 맵 탐색 / false: 본게임 - 일반 걷기 모드
+	// 정찰 모드
+	// true: 정찰 단계 - 걷기 속도를 올려서 맵을 둘러볼 수 있게 함 / false: 본게임 - 기본 속도로 복귀
+	// (기존 플라이 관전 방식은 삭제됨 - 이제 하이더와 동일하게 걸어서 정찰함)
+	// GameMode를 건드리지 않기 위해 외부에서 호출받는 대신 Tick에서 GameState 페이즈를 직접 감지해서 스스로 호출함
 	UFUNCTION(BlueprintCallable)
 	void SetScoutingMode(bool bEnable);
-
-	// 현재 비행(정찰) 중인지 여부 - PlayerController에서 상하 입력/시야 방향 이동 판단에 사용
-	bool IsFlying() const;
 	
 	// 투사체에 맞았을 때 스턴 적용 (서버 전용 - AFDThrowItem에서 호출)
 	// 이미 스턴 중이면 무시 (연장 없음 - 술래를 계속 묶어둘 수 없게)
@@ -61,10 +63,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
 private:
-	// 관전모드때 술래 메시 안보이게 하기
-	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_SetMeshVisibility(bool bVisible);
-	
+	// 정찰 속도 버프가 현재 적용되어 있는지 (Tick에서 Phase 변화 감지용, 중복 호출 방지)
+	bool bScoutModeApplied = false;
+
 	// 포획 판정용 콜리전 컴포넌트 (에디터에서 크기 조절 가능)
 	UPROPERTY(VisibleAnywhere, Category = "Capture")
 	class USphereComponent* CaptureCollision;
