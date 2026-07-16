@@ -107,6 +107,12 @@ void AFDPlayerController::SetupInputComponent()
 	{
 		EIC->BindAction(IA_UseThrowItem, ETriggerEvent::Started, this, &AFDPlayerController::Input_UseThrowItem);
 	}
+
+	// 시점 전환 입력 바인딩 (1인칭 ↔ 3인칭, 술래/하이더 공용)
+	if (IA_ToggleView)
+	{
+		EIC->BindAction(IA_ToggleView, ETriggerEvent::Started, this, &AFDPlayerController::Input_ToggleView);
+	}
 }
 
 void AFDPlayerController::Input_Move(const FInputActionValue& Value)
@@ -226,6 +232,22 @@ void AFDPlayerController::Input_UseThrowItem(const FInputActionValue& Value)
 	// 3인칭 카메라 위치 때문에 화면 중앙(크로스헤어)이랑 실제 발사 방향이 어긋나 보이는 문제 →
 	// 조준 중엔 1인칭으로 줌인해서 눈높이 = 크로스헤어 = 발사 방향이 일치하게 함
 	Hider->SetAimCameraMode(Inventory->IsAiming());
+}
+
+void AFDPlayerController::Input_ToggleView(const FInputActionValue& Value)
+{
+	// 술래: 1인칭 ↔ 3인칭 전환
+	if (AFDTaggerCharacter* Tagger = Cast<AFDTaggerCharacter>(GetPawn()))
+	{
+		Tagger->ToggleViewMode();
+		return;
+	}
+
+	// 하이더: 1인칭 ↔ 3인칭 전환 (조준 중엔 내부에서 무시됨)
+	if (AFDHiderCharacter* Hider = Cast<AFDHiderCharacter>(GetPawn()))
+	{
+		Hider->ToggleViewMode();
+	}
 }
 
 void AFDPlayerController::Input_PaintStart(const FInputActionValue& Value)

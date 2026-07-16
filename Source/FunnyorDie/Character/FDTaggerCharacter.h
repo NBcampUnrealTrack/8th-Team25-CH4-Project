@@ -46,6 +46,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_TryCapture();
 
+	// 1인칭 ↔ 3인칭 시점 전환 토글 (PlayerController의 IA_ToggleView 입력 시 호출)
+	// 로컬(본인 화면)에서만 영향 있음 - 다른 플레이어가 보는 내 모습과는 무관
+	UFUNCTION(BlueprintCallable)
+	void ToggleViewMode();
+
 	// 정찰 모드
 	// true: 정찰 단계 - 걷기 속도를 올려서 맵을 둘러볼 수 있게 함 / false: 본게임 - 기본 속도로 복귀
 	// (기존 플라이 관전 방식은 삭제됨 - 이제 하이더와 동일하게 걸어서 정찰함)
@@ -70,9 +75,24 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Capture")
 	class USphereComponent* CaptureCollision;
 
-	// 술래는 1인칭 고정 - 캡슐에 눈높이로 바로 부착
+	// 카메라 붐 - 눈높이에 부착, TargetArmLength를 0(1인칭)~ThirdPersonArmLength(3인칭) 사이로
+	// 보간해서 자연스럽게 시점을 전환함 (기본값: 3인칭)
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
-	class UCameraComponent* FirstPersonCamera;
+	class USpringArmComponent* CameraBoom;
+
+	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	class UCameraComponent* FollowCamera;
+
+	// 3인칭일 때 카메라 붐 길이 (에디터에서 조정 가능)
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float ThirdPersonArmLength = 300.f;
+
+	// 시점 전환 보간 속도 (클수록 빨리 전환됨)
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float ViewTransitionSpeed = 8.f;
+
+	// 현재 목표 시점이 1인칭인지 여부 (기본값 false = 3인칭 시작)
+	bool bIsFirstPersonView = false;
 
 	// 채색(커스터마이징) 공용 컴포넌트 - Hider 쪽에도 동일하게 부착됨
 	UPROPERTY(VisibleAnywhere, Category = "Customization")

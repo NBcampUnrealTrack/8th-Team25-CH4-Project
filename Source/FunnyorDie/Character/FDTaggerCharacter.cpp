@@ -7,6 +7,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/DataTable.h"
 #include "GameMode/FDGameMode.h"
@@ -33,13 +34,20 @@ AFDTaggerCharacter::AFDTaggerCharacter()
 	// 이모트 컴포넌트 생성 - 마찬가지로 Hider 쪽에도 동일하게 추가됨
 	EmoteComp = CreateDefaultSubobject<UFDEmoteComponent>(TEXT("EmoteComp"));
 
-	// 1인칭 카메라 - 캡슐 눈높이(BaseEyeHeight)에 바로 부착, 마우스 회전을 그대로 카메라에 반영
-	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
-	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
-	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
-	FirstPersonCamera->bUsePawnControlRotation = true;
+	// 카메라 붐 - 눈높이에 부착, TargetArmLength를 보간시켜 1인칭↔3인칭을 자연스럽게 오갈 수 있게 함
+	// 기본값은 3인칭(ThirdPersonArmLength)이고, IA_ToggleView 입력 시 0(1인칭)까지 부드럽게 줄어듦
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(GetCapsuleComponent());
+	CameraBoom->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->bDoCollisionTest = true; // 벽에 카메라 파고들지 않게 자동으로 당겨줌
+	CameraBoom->TargetArmLength = ThirdPersonArmLength; // 기본 3인칭으로 시작
 
-	// 1인칭이라 몸 자체가 마우스 좌우 회전을 따라가야 함 (3인칭 기본값인 이동방향 정렬은 꺼둠)
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false; // 붐이 이미 회전을 받았으니 카메라 자체는 추가 회전 불필요
+
+	// 마우스 좌우 회전을 몸이 그대로 따라가야 함 (1인칭이든 3인칭이든 조준 방향과 몸 방향을 일치시키기 위함)
 	bUseControllerRotationYaw = true;
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
@@ -51,17 +59,9 @@ void AFDTaggerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 술래는 항상 1인칭이라 카메라가 캡슐/눈높이에 바짝 붙어있어서
-	// 자기 몸통(어깨, 머리 등) 메시가 카메라 근평면을 뚫고 시야를 가리는 문제가 있었음
-	// SetOwnerNoSee는 본인 화면에서만 메시를 숨기고, 다른 클라이언트 화면에는 그대로 보임
-	// (Hider의 조준 카메라 전환 때 쓰는 방식과 동일)
-	if (IsLocallyControlled())
-	{
-		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
-		{
-			SkeletalMesh->SetOwnerNoSee(true);
-		}
-	}
+	// 기본 시점은 3인칭이라 메시를 미리 숨길 필요 없음
+	// 1인칭에 가까워졌을 때 메시를 숨기는 처리는 Tick에서 카메라 붐 길이를 보고 동적으로 처리함
+	// (SetOwnerNoSee는 본인 화면에서만 메시를 숨기고, 다른 클라이언트 화면에는 그대로 보임)
 
 	// 서버에서만 Overlap 이벤트 바인딩 (포획 판정은 서버 권한으로만 실행)
 	if (HasAuthority())
@@ -74,6 +74,26 @@ void AFDTaggerCharacter::BeginPlay()
 void AFDTaggerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// 1인칭 ↔ 3인칭 시점 전환 - 로컬(본인) 화면에서만 의미 있는 연출이라 다른 클라이언트에 영향 없음
+	// 카메라 붐 길이를 목표값까지 매 프레임 보간해서 순간적으로 튀지 않고 자연스럽게 줌 인/아웃되게 함
+	if (IsLocallyControlled() && CameraBoom)
+	{
+		const float TargetArmLength = bIsFirstPersonView ? 0.f : ThirdPersonArmLength;
+		CameraBoom->TargetArmLength = FMath::FInterpTo(
+			CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, ViewTransitionSpeed);
+
+		// 1인칭에 거의 다 왔으면(붐 길이가 거의 0이면) 본인 시점에서만 메시를 숨김
+		// - 다른 클라이언트 화면에는 영향 없음 (SetOwnerNoSee는 본인 전용)
+		if (USkeletalMeshComponent* SkeletalMesh = GetMesh())
+		{
+			const bool bShouldHideMesh = CameraBoom->TargetArmLength < 10.f;
+			if (SkeletalMesh->bOwnerNoSee != bShouldHideMesh)
+			{
+				SkeletalMesh->SetOwnerNoSee(bShouldHideMesh);
+			}
+		}
+	}
 
 	// GameMode/GameState 파일을 건드리지 않기 위해, 정찰 단계 진입·종료를 여기서 직접 감지함
 	// (Hider 쪽과 동일한 패턴) - 이동 속도는 서버 권한에서만 바꿔야 정상적으로 반영되므로 서버에서만 체크
@@ -157,6 +177,14 @@ void AFDTaggerCharacter::SetScoutingMode(bool bEnable)
 	}
 
 	Movement->MaxWalkSpeed = bEnable ? ScoutSpeed : NormalSpeed;
+}
+
+void AFDTaggerCharacter::ToggleViewMode()
+{
+	// 로컬(본인) 화면에서만 의미 있음 - 실제 보간 처리는 Tick에서 IsLocallyControlled() 체크 후 수행됨
+	bIsFirstPersonView = !bIsFirstPersonView;
+
+	UE_LOG(LogTemp, Log, TEXT("[술래] 시점 전환 - %s"), bIsFirstPersonView ? TEXT("1인칭") : TEXT("3인칭"));
 }
 
 void AFDTaggerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
