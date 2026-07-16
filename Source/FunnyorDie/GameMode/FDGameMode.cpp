@@ -11,6 +11,7 @@
 #include "Engine/DataTable.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"    
+#include "GameInstance/FDGameInstance.h"
 
 AFDGameMode::AFDGameMode()
 {
@@ -56,12 +57,76 @@ UClass* AFDGameMode::GetDefaultPawnClassForController_Implementation(AController
 	// DefaultPawnClass(=nullptr)를 리턴해서 스폰 안됨
 }
 
-void AFDGameMode::StartPlay() // 게임 시작
+void AFDGameMode::StartPlay()
 {
 	Super::StartPlay();
 
-	// 맵 옮겨오고 5초뒤에 Role 배정 시작
-	GetWorldTimerManager().SetTimer(PhaseTimerHandle, this, &AFDGameMode::AssignRoles, 5.f, false);
+	// 로비에서 실어보낸 목표 인원 회수
+	if (const UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+	{
+		ExpectedPlayerCount = GI->ExpectedPlayerCount;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 목표 인원 %d명 — 전원 재접속 대기 시작"), ExpectedPlayerCount);
+
+	PlayerWaitElapsed = 0.f;
+
+	// 고정 5초 대신 전원 모일 때까지 0.5초 간격으로 확인
+	// SetTimer의 마지막 인자 true = 반복 타이머 (하드 트래블 재접속을 계속 폴링)
+	GetWorldTimerManager().SetTimer(
+		WaitTimerHandle, this, &AFDGameMode::WaitForPlayers,
+		PlayerWaitInterval, true);
+}
+
+void AFDGameMode::WaitForPlayers()
+{
+	PlayerWaitElapsed += PlayerWaitInterval;
+
+	const int32 Current = GameState->PlayerArray.Num();
+	const bool bEveryoneHere = (ExpectedPlayerCount > 0) && (Current >= ExpectedPlayerCount);
+	const bool bTimedOut     = (PlayerWaitElapsed >= MaxPlayerWaitTime);
+
+	// 아직 덜 모였고 타임아웃도 아니면 다음 폴링까지 그냥 대기
+	if (!bEveryoneHere && !bTimedOut)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[GameMode] 대기 중... %d/%d"), Current, ExpectedPlayerCount);
+		return;
+	}
+	
+	if (bEveryoneHere)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 전원 %d명 집합 완료 — 매치 시작"), Current);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 대기 타임아웃 — %d/%d명으로 강제 시작"), Current, ExpectedPlayerCount);
+	}
+
+	// 시작 처리
+	
+	// 이 시점 이후 접속은 PreLogin에서 거부
+	bRosterLocked = true;
+	
+	// 반복 타이머 정지
+	GetWorldTimerManager().ClearTimer(WaitTimerHandle);
+	
+	// 역할 배정
+	AssignRoles();
+}
+
+void AFDGameMode::PreLogin(const FString& Options, const FString& Address,
+						   const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	// 로스터가 잠긴 뒤(=매치 시작 후) 들어오려는 접속은 거부
+	if (bRosterLocked)
+	{
+		// ErrorMessage에 값이 채워지면 엔진이 이 접속을 승인하지 않음
+		ErrorMessage = TEXT("Match already in progress");
+		UE_LOG(LogTemp, Warning, TEXT("[GameMode] 매치 진행 중 — 난입 거부: %s"), *Address);
+		return;
+	}
+
+	// 잠기기 전(=로비 인원 재접속 중)이면 정상 승인
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 }
 
 void AFDGameMode::AssignRoles() // 롤 배정

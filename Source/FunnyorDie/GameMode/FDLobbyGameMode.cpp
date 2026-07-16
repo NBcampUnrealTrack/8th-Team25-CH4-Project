@@ -5,6 +5,7 @@
 #include "PlayerState/FDPlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameInstance/FDGameInstance.h"
 
 // 여기서 하는 것 : 1. postlogin : 일단 들어온 사람들에게 playerstate 부여됨 (처음 들어온 사람 방장)
 // 2. 중간에 나갈수도 있으니까 logout과 PromoteNewHost로 방어
@@ -91,8 +92,14 @@ void AFDLobbyGameMode::TryStartMatch(APlayerController* Requester)
 	{
 		return;
 	}
+	
+	// 지금 이 순간의 인원 수
+	const int32 StartCount = GameState->PlayerArray.Num();
 
-	// 디버깅 로그
-	UE_LOG(LogTemp, Warning, TEXT("[Lobby] 매치 시작! %s 로 이동"), *NextLevelName);
+	if (UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+	{
+		GI->ExpectedPlayerCount = StartCount;
+	}
+
 	GetWorld()->ServerTravel(NextLevelName);
 }
