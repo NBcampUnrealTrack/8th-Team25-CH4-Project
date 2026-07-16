@@ -19,6 +19,8 @@ AFDLobbyGameMode::AFDLobbyGameMode()
 	PlayerStateClass = AFDPlayerState::StaticClass();
 	PlayerControllerClass = AFDLobbyPlayerController::StaticClass();
 	// 이 레벨에 접속하는 모든 플레이어는 AFDLobbyPlayerController를 받음
+	
+	DefaultPawnClass = nullptr;
 }
 
 void AFDLobbyGameMode::PostLogin(APlayerController* NewPlayer)
