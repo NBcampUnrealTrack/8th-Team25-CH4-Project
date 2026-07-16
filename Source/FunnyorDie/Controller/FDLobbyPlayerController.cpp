@@ -5,6 +5,8 @@
 #include "PlayerState/FDPlayerState.h"
 #include "UI/FDLobbyWidget.h"
 #include "GameFramework/GameStateBase.h"
+#include "Camera/CameraActor.h"
+#include "Kismet/GameplayStatics.h"
 
 void AFDLobbyPlayerController::BeginPlay()
 {
@@ -26,6 +28,20 @@ void AFDLobbyPlayerController::BeginPlay()
 
 		GetWorldTimerManager().SetTimer(RefreshTimerHandle, this, &AFDLobbyPlayerController::RefreshLobbyUI, 1.0f, true);
 		// 인원이 바뀌는거 감지하는 로직으로 나중에 바꾸겠음 지금은 일단 1초마다 함수 호출
+		
+		TArray<AActor*> FoundCams;
+		UGameplayStatics::GetAllActorsOfClassWithTag(
+			this, ACameraActor::StaticClass(), FName("LobbyCam"), FoundCams);
+
+		if (FoundCams.Num() > 0)
+		{
+			SetViewTarget(FoundCams[0]);
+		}
+		
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Lobby] LobbyCam 태그 카메라를 못 찾음"));
+		}
 	}
 }
 
