@@ -186,7 +186,7 @@ void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 		Inventory->FireThrowItem();
 
 		// 던지자마자 바로 3인칭으로 전환하면 시점이 확 바뀌면서 멀미를 유발한다는 피드백이 있어서
-		// 2초 정도 텀을 두고 자연스럽게 3인칭으로 복귀시킴
+		// 1초 정도 텀을 두고 자연스럽게 3인칭으로 복귀시킴
 		TWeakObjectPtr<AFDHiderCharacter> WeakHider(Hider);
 		GetWorldTimerManager().SetTimer(
 			ThrowCameraReturnTimerHandle,
@@ -197,7 +197,7 @@ void AFDPlayerController::Input_Attack(const FInputActionValue& Value)
 					HiderPtr->SetAimCameraMode(false);
 				}
 			},
-			2.f,
+			1.f,
 			false);
 	}
 }

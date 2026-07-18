@@ -32,9 +32,13 @@ AFDHiderCharacter::AFDHiderCharacter()
 	// 인벤토리 
 	ItemInventoryComp = CreateDefaultSubobject<UFDItemInventoryComponent>(TEXT("ItemInventoryComp"));
 
-	// 동상 머리 장비 메시 생성 - 머리 소켓에 붙여두고 평소엔 숨겨둠 (장착 전까지 비어있는 상태)
+	// 동상 머리 장비 메시 생성 - 평소엔 숨겨둠 (장착 전까지 비어있는 상태)
+	// 소켓 이름(HeadSocketName)은 여기서 넘기지 않음: EditDefaultsOnly라 블루프린트 클래스 디폴트에서
+	// 값이 바뀔 수 있는데, 그 오버라이드는 이 네이티브 생성자가 끝난 뒤에 적용되기 때문에
+	// 여기서 넘기면 항상 C++ 기본값("head")으로 고정되어버림 (실제 소켓 이름을 바꿔도 무시됨).
+	// 실제 소켓 부착은 BeginPlay에서 오버라이드가 반영된 값으로 다시 처리함
 	HeadEquipMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeadEquipMesh"));
-	HeadEquipMesh->SetupAttachment(GetMesh(), HeadSocketName);
+	HeadEquipMesh->SetupAttachment(GetMesh());
 	HeadEquipMesh->SetVisibility(false);
 	HeadEquipMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 장식용이라 콜리전 불필요
 
@@ -155,6 +159,14 @@ void AFDHiderCharacter::BeginPlay()
 	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
 	{
 		DefaultWalkSpeed = MoveComp->MaxWalkSpeed;
+	}
+
+	// 생성자에서는 소켓을 지정하지 않고 붙여뒀으므로, 블루프린트 클래스 디폴트에서 바뀐
+	// HeadSocketName 값이 실제로 반영된 이 시점에 진짜 소켓으로 다시 어태치함
+	if (HeadEquipMesh)
+	{
+		HeadEquipMesh->AttachToComponent(
+			GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, HeadSocketName);
 	}
 
 	// CustomizationComp/EmoteComp의 BeginPlay는 컴포넌트 자체 라이프사이클에서 자동 호출되니까
