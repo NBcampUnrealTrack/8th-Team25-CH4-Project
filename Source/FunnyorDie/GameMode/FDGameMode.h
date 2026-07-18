@@ -49,6 +49,12 @@ protected:
 	// 본게임 진입 시 역할별 PlayerStart로 캐릭터를 텔레포트 (술래/하이더 분리)
 	void TeleportPlayersToStarts();
 	
+	// 죽은(관전) 플레이어 전원의 카메라를 지금 살아있는 대상으로 재배치
+	void UpdateSpectators();
+
+	// 관전 대상으로 삼을 살아있는 플레이어의 폰을 하나 반환 (하이더 우선, 없으면 술래)
+	APawn* FindLivingViewTarget() const;
+	
 	// 게임 맵이 기다려야 할 목표 인원 (로비에서 GameInstance 통해 건너온 값)
 	int32 ExpectedPlayerCount = 0;
 

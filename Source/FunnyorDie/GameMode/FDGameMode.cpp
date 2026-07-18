@@ -357,6 +357,58 @@ void AFDGameMode::RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharac
 	TaggerCharacter->StartCaptureSequence(HiderCharacter);
 }
 
+APawn* AFDGameMode::FindLivingViewTarget() const
+{
+	APawn* TaggerPawn = nullptr; // 살아있는 하이더가 하나도 없을 때 쓸 폴백
+
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS) continue;
+
+		// 술래는 폴백으로만 붙잡아두고 계속 진행 (하이더를 우선 찾음)
+		if (FDPS->RoleTag == EFDRole::Tagger)
+		{
+			TaggerPawn = FDPS->GetPawn();
+			continue;
+		}
+
+		// 살아있는 하이더를 찾으면 그 폰을 즉시 반환
+		if (FDPS->RoleTag == EFDRole::Hider && FDPS->bIsAlive)
+		{
+			if (APawn* HiderPawn = FDPS->GetPawn())
+			{
+				return HiderPawn;
+			}
+		}
+	}
+
+	// 살아있는 하이더가 없으면 술래 시점으로 폴백 (곧 EndMatch라 방어용)
+	return TaggerPawn;
+}
+
+void AFDGameMode::UpdateSpectators()
+{
+	APawn* ViewTarget = FindLivingViewTarget();
+	if (!ViewTarget) return;
+
+	for (APlayerState* PS : GameState->PlayerArray)
+	{
+		const AFDPlayerState* FDPS = Cast<AFDPlayerState>(PS);
+		if (!FDPS) continue;
+
+		if (FDPS->bIsAlive) continue; // 살아있는 사람은 자기 캐릭터를 그대로 봄
+
+		if (AFDPlayerController* FDPC = Cast<AFDPlayerController>(FDPS->GetOwningController()))
+		{
+			if (FDPC->GetPawn() == ViewTarget) continue;
+
+			// 서버에서 직접 카메라를 만지지 않고 해당 클라에게 RPC로 지시
+			FDPC->Client_SetSpectateTarget(ViewTarget);
+		}
+	}
+}
+
 void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 {
 	if (!HiderCharacter || !bWasCaptured) return;
@@ -364,7 +416,7 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 	AFDGameState* FDGameState = GetGameState<AFDGameState>();
 	if (!FDGameState) return;
 
-	// 잡힌 하이더 본인의 PlayerState에 기록
+	// 1) 잡힌 하이더 본인의 PlayerState에 사망 기록
 	if (APlayerState* HiderPS = HiderCharacter->GetPlayerState())
 	{
 		if (AFDPlayerState* FDHiderPS = Cast<AFDPlayerState>(HiderPS))
@@ -376,8 +428,20 @@ void AFDGameMode::ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured)
 
 	--FDGameState->AliveHiderCount;
 
-	UE_LOG(LogTemp, Warning, TEXT("[GameMode] 포획 확정 - 생존 하이더 %d명 남음"), FDGameState->AliveHiderCount);
+	// 2) 죽어있는 플레이어 전원의 시점을 지금 살아있는 사람으로 재배치
+	UpdateSpectators();
 
+	// 3) 잡힌 캐릭터를 파괴하지 않고 숨김 처리
+	HiderCharacter->SetActorHiddenInGame(true);
+	HiderCharacter->SetActorEnableCollision(false);
+
+	// 안 보이는 몸이 돌아다니지 않도록 이동 입력 차단
+	if (AFDPlayerController* DeadPC = Cast<AFDPlayerController>(HiderCharacter->GetController()))
+	{
+		DeadPC->Client_LockMovement();
+	}
+
+	// 4) 남은 하이더가 없으면 게임 종료
 	if (FDGameState->AliveHiderCount <= 0)
 	{
 		EndMatch();

@@ -27,6 +27,16 @@ void AFDPlayerController::Client_UnlockMovement_Implementation()
 	UE_LOG(LogTemp, Log, TEXT("[플레이어 컨트롤러] 이동 잠금 해제 (클라이언트)"));
 }
 
+void AFDPlayerController::Client_SetSpectateTarget_Implementation(AActor* NewViewTarget)
+{
+	if (!NewViewTarget) return;
+
+	bAutoManageActiveCameraTarget = false;
+
+	// SetViewTargetWithBlend: 엔진 제공. 카메라가 바라볼 액터를 바꿈 (0.5초 블렌드)
+	SetViewTargetWithBlend(NewViewTarget, 0.5f);
+}
+
 void AFDPlayerController::BeginPlay()
 {
 	Super::BeginPlay();

@@ -39,6 +39,10 @@ public:
 
 	UFUNCTION(Client, Reliable) // 이동 잠금 해제 RPC (아직 쓰이는 곳은 없음)
 	void Client_UnlockMovement();
+	
+	// 관전 시점을 지정한 액터로 이동
+	UFUNCTION(Client, Reliable)
+	void Client_SetSpectateTarget(AActor* NewViewTarget);
 
 	// 페인팅 모드 진입/해제 시 매핑 컨텍스트 스위칭 (Default <-> Customization)
 	void SetCustomizationInputMode(bool bEnable);
