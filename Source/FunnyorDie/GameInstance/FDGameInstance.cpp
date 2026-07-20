@@ -251,3 +251,19 @@ void UFDGameInstance::PlayMusic(USoundBase* NewMusic)
 
 	UE_LOG(LogTemp, Log, TEXT("[GameInstance] 브금 전환: %s"), *NewMusic->GetName());
 }
+
+void UFDGameInstance::StopMusic()
+{
+	// 이미 정지 상태(재생 중인 게 없음)면 아무것도 안 함
+	if (!CurrentMusic && !MusicAudioComponent) return;
+
+	if (MusicAudioComponent)
+	{
+		MusicAudioComponent->FadeOut(1.0f, 0.f);
+		MusicAudioComponent = nullptr;
+	}
+
+	CurrentMusic = nullptr;
+
+	UE_LOG(LogTemp, Log, TEXT("[GameInstance] 브금 정지"));
+}
