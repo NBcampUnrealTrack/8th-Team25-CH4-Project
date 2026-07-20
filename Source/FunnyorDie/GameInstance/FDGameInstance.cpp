@@ -7,6 +7,8 @@
 #include "Interfaces/OnlineIdentityInterface.h"     
 #include "OnlineSubsystemUtils.h"                   
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
 
 void UFDGameInstance::Init()
 {
@@ -214,4 +216,54 @@ void UFDGameInstance::SetStatus(EFDSessionStatus NewStatus)
 {
 	CurrentStatus = NewStatus;
 	OnSessionStatusChanged.Broadcast(NewStatus);   // 구독 중인 위젯들에게 방송
+}
+
+void UFDGameInstance::PlayMusic(USoundBase* NewMusic)
+{
+	if (!NewMusic) return;
+
+	// 이미 같은 곡이 재생 중이면 아무것도 안 함
+	// (Start -> Lobby 넘어갈 때 둘 다 MenuMusic이라 여기서 걸러져서 끊기지 않고 이어짐)
+	if (NewMusic == CurrentMusic && MusicAudioComponent && MusicAudioComponent->IsPlaying())
+	{
+		return;
+	}
+
+	// 재생 중이던 이전 곡은 페이드아웃 후 정지
+	if (MusicAudioComponent)
+	{
+		MusicAudioComponent->FadeOut(1.0f, 0.f);
+	}
+
+	CurrentMusic = NewMusic;
+
+	// SpawnSound2D: 월드 위치와 무관하게 항상 같은 볼륨으로 들리는 브금용 사운드 생성
+	// bPersistAcrossLevelTransition = true가 핵심 - 레벨 이동(ServerTravel) 중에도 안 끊기게 해줌
+	MusicAudioComponent = UGameplayStatics::SpawnSound2D(
+		this, NewMusic, /*VolumeMultiplier=*/1.f, /*PitchMultiplier=*/1.f,
+		/*StartTime=*/0.f, /*ConcurrencySettings=*/nullptr,
+		/*bPersistAcrossLevelTransition=*/true, /*bAutoDestroy=*/true);
+
+	if (MusicAudioComponent)
+	{
+		MusicAudioComponent->FadeIn(1.0f);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[GameInstance] 브금 전환: %s"), *NewMusic->GetName());
+}
+
+void UFDGameInstance::StopMusic()
+{
+	// 이미 정지 상태(재생 중인 게 없음)면 아무것도 안 함
+	if (!CurrentMusic && !MusicAudioComponent) return;
+
+	if (MusicAudioComponent)
+	{
+		MusicAudioComponent->FadeOut(1.0f, 0.f);
+		MusicAudioComponent = nullptr;
+	}
+
+	CurrentMusic = nullptr;
+
+	UE_LOG(LogTemp, Log, TEXT("[GameInstance] 브금 정지"));
 }
