@@ -51,6 +51,23 @@ public:
 	// 매치 시작 시점의 로비 인원 수.
 	int32 ExpectedPlayerCount = 0;
 
+	// 브금 재생 요청 - 이미 같은 곡이 재생 중이면 무시, 다르면 페이드 전환
+	// Start PlayerController -> StartMusic / Lobby PlayerController -> LobbyMusic / 인게임 PlayerController -> GameMusic 으로 호출
+	UFUNCTION(BlueprintCallable, Category = "FD|Audio")
+	void PlayMusic(class USoundBase* NewMusic);
+
+	// 시작 화면 브금 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
+	class USoundBase* StartMusic;
+
+	// 로비 브금 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
+	class USoundBase* LobbyMusic;
+
+	// 본게임 브금 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
+	class USoundBase* GameMusic;
+
 protected:
 	// 호스트가 CreateSession 성공 후 ServerTravel할 맵
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Session")
@@ -86,4 +103,12 @@ private:
 
 	// 실제 CreateSession 호출부
 	void CreateSessionInternal();
+
+	// 현재 재생 중인 브금 컴포넌트 (전환 시 페이드아웃하려고 붙잡고 있음)
+	UPROPERTY()
+	class UAudioComponent* MusicAudioComponent;
+
+	// 지금 재생 중인 곡 - 같은 곡 재요청 시 끊기지 않게 비교용
+	UPROPERTY()
+	class USoundBase* CurrentMusic = nullptr;
 };

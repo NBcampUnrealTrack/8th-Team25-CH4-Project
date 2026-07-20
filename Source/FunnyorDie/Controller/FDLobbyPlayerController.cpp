@@ -7,6 +7,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Camera/CameraActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameInstance/FDGameInstance.h"
 
 void AFDLobbyPlayerController::BeginPlay()
 {
@@ -41,6 +42,15 @@ void AFDLobbyPlayerController::BeginPlay()
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("[Lobby] LobbyCam 태그 카메라를 못 찾음"));
+		}
+	}
+
+	// 로비 전용 브금 재생
+	if (IsLocalController())
+	{
+		if (UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+		{
+			GI->PlayMusic(GI->LobbyMusic);
 		}
 	}
 }

@@ -13,6 +13,7 @@
 #include "Emote/FDEmoteMenuWidget.h"
 #include "Character/FDHiderCharacter.h"
 #include "Item/FDItemInventoryComponent.h"
+#include "GameInstance/FDGameInstance.h"
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -51,6 +52,12 @@ void AFDPlayerController::BeginPlay()
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 		}
+	}
+
+	// 본게임 브금으로 전환 (Start/Lobby의 MenuMusic과는 다른 곡이라 여기서 페이드 전환됨)
+	if (UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+	{
+		GI->PlayMusic(GI->GameMusic);
 	}
 }
 
