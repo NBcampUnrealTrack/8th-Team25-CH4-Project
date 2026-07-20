@@ -3,6 +3,7 @@
 #include "Controller/FDStartPlayerController.h"
 #include "UI/FDStartWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "GameInstance/FDGameInstance.h"
 
 void AFDStartPlayerController::BeginPlay()
 {
@@ -19,6 +20,15 @@ void AFDStartPlayerController::BeginPlay()
 		SetInputMode(InputMode);
 
 		bShowMouseCursor = true;
+	}
+
+	// 시작 화면 브금 재생 (클라이언트 로컬)
+	if (IsLocalController())
+	{
+		if (UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
+		{
+			GI->PlayMusic(GI->StartMusic);
+		}
 	}
 }
 

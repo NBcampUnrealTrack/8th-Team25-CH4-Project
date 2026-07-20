@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "GameMode/FDGameMode.h" // EMatchPhase enum 사용
 #include "FDPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -17,6 +18,7 @@ class FUNNYORDIE_API AFDPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
+	AFDPlayerController();
 
 	// 서버 → 술래 클라이언트: 포획 팝업 UI 활성화
 	UFUNCTION(Client, Reliable)
@@ -50,6 +52,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+
+	// GameMode/GameState 수정 없이, GameState의 EMatchPhase 변화를 직접 감지해서
+	// 정찰(60초)/본게임(300초)/엔딩 브금을 그때그때 전환하기 위함 (Tagger/Hider의 정찰 속도 감지와 동일 패턴)
+	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	// 인풋 매핑 컨텍스트 (에디터에서 할당)
@@ -158,4 +164,11 @@ private:
 
 	// 실제로 메뉴를 열고 닫는 함수 - 이동/카메라는 계속 허용되게 FInputModeGameAndUI 사용
 	void ToggleEmoteMenu(bool bOpen);
+
+	// 직전 프레임까지 확인한 매치 페이즈 - Tick에서 변화 감지용 (중복 호출 방지)
+	// Warmup으로 시작 = 접속 직후엔 브금 없음
+	EMatchPhase LastPhase = EMatchPhase::Warmup;
+
+	// 페이즈가 바뀌었을 때 그에 맞는 브금으로 전환 (Tick에서 변화 감지 시 호출)
+	void UpdatePhaseMusic(EMatchPhase NewPhase);
 };
