@@ -14,6 +14,13 @@
 #include "Character/FDHiderCharacter.h"
 #include "Item/FDItemInventoryComponent.h"
 #include "GameInstance/FDGameInstance.h"
+#include "GameState/FDGameState.h"
+
+AFDPlayerController::AFDPlayerController()
+{
+	// 정찰/본게임/엔딩 브금 전환을 위해 GameState 페이즈를 매 프레임 확인해야 함
+	PrimaryActorTick.bCanEverTick = true;
+}
 
 void AFDPlayerController::Client_LockMovement_Implementation()
 {
@@ -54,10 +61,56 @@ void AFDPlayerController::BeginPlay()
 		}
 	}
 
-	// 본게임 브금으로 전환 (Start/Lobby의 MenuMusic과는 다른 곡이라 여기서 페이드 전환됨)
+	// 접속 직후(역할 배정 전)에는 브금 없음 - Lobby 브금이 계속 흐르고 있었다면 여기서 정지
 	if (UFDGameInstance* GI = GetGameInstance<UFDGameInstance>())
 	{
-		GI->PlayMusic(GI->GameMusic);
+		GI->StopMusic();
+	}
+}
+
+void AFDPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (!IsLocalController()) return;
+
+	const AFDGameState* FDGameState = GetWorld()->GetGameState<AFDGameState>();
+	if (!FDGameState) return;
+
+	// 페이즈가 실제로 바뀐 순간에만 브금 전환 (매 프레임 재생 요청 방지)
+	if (FDGameState->CurrentPhase == LastPhase) return;
+
+	LastPhase = FDGameState->CurrentPhase;
+	UpdatePhaseMusic(LastPhase);
+}
+
+void AFDPlayerController::UpdatePhaseMusic(EMatchPhase NewPhase)
+{
+	UFDGameInstance* GI = GetGameInstance<UFDGameInstance>();
+	if (!GI) return;
+
+	switch (NewPhase)
+	{
+	case EMatchPhase::Warmup:
+	case EMatchPhase::AssignRole:
+		// 대기/역할 배정 중엔 브금 없음
+		GI->StopMusic();
+		break;
+
+	case EMatchPhase::Scouting:
+		// 60초 정찰 단계 - 맵 관찰 전용 브금
+		GI->PlayMusic(GI->ScoutMusic);
+		break;
+
+	case EMatchPhase::InGame:
+		// 300초 본게임 브금
+		GI->PlayMusic(GI->InGameMusic);
+		break;
+
+	case EMatchPhase::GameOver:
+		// 엔딩 브금
+		GI->PlayMusic(GI->EndingMusic);
+		break;
 	}
 }
 

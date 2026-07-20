@@ -52,9 +52,14 @@ public:
 	int32 ExpectedPlayerCount = 0;
 
 	// 브금 재생 요청 - 이미 같은 곡이 재생 중이면 무시, 다르면 페이드 전환
-	// Start PlayerController -> StartMusic / Lobby PlayerController -> LobbyMusic / 인게임 PlayerController -> GameMusic 으로 호출
+	// Start PlayerController -> StartMusic / Lobby PlayerController -> LobbyMusic
+	// 인게임 PlayerController -> Phase(EMatchPhase)에 따라 ScoutMusic / InGameMusic / EndingMusic 으로 호출
 	UFUNCTION(BlueprintCallable, Category = "FD|Audio")
 	void PlayMusic(class USoundBase* NewMusic);
+
+	// 브금 정지 (페이드아웃) - 접속 중/역할 배정 중처럼 브금이 없어야 하는 구간에 사용
+	UFUNCTION(BlueprintCallable, Category = "FD|Audio")
+	void StopMusic();
 
 	// 시작 화면 브금 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
@@ -64,9 +69,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
 	class USoundBase* LobbyMusic;
 
-	// 본게임 브금 (에디터에서 할당)
+	// 정찰(Scouting, 60초) 단계 전용 브금 - 맵 관찰용 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
-	class USoundBase* GameMusic;
+	class USoundBase* ScoutMusic;
+
+	// 본게임(InGame, 300초) 브금 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
+	class USoundBase* InGameMusic;
+
+	// 게임 종료(GameOver) 엔딩 브금 (에디터에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "FD|Audio")
+	class USoundBase* EndingMusic;
 
 protected:
 	// 호스트가 CreateSession 성공 후 ServerTravel할 맵
