@@ -15,6 +15,7 @@
 #include "Customization/FDCustomizationComponent.h"
 #include "Emote/FDEmoteComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
 
 AFDTaggerCharacter::AFDTaggerCharacter()
 {
@@ -112,6 +113,10 @@ void AFDTaggerCharacter::Tick(float DeltaSeconds)
 
 void AFDTaggerCharacter::Server_TryCapture_Implementation()
 {
+	// 스윙음은 명중/헛스윙/스턴 여부와 무관하게 클릭 즉시 재생되어야 함
+	// -> 스턴 체크보다 먼저 호출
+	Multicast_PlaySwingSound();
+
 	// 스턴 중엔 포획 불가
 	if (bIsStunned) return;
 
@@ -124,6 +129,13 @@ void AFDTaggerCharacter::Server_TryCapture_Implementation()
 	{
 		CaptureCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}, 0.2f, false);
+}
+
+void AFDTaggerCharacter::Multicast_PlaySwingSound_Implementation()
+{
+	if (!SwingSound) return;
+
+	UGameplayStatics::PlaySoundAtLocation(this, SwingSound, GetActorLocation());
 }
 
 void AFDTaggerCharacter::OnCaptureCollisionOverlap(

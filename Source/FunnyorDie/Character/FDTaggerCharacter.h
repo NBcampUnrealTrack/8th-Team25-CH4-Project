@@ -46,6 +46,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_TryCapture();
 
+	// 스윙 사운드 재생 (전체 클라이언트) - 명중/헛스윙/스턴 여부와 무관하게 클릭 즉시 재생
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlaySwingSound();
+
 	// 1인칭 ↔ 3인칭 시점 전환 토글 (PlayerController의 IA_ToggleView 입력 시 호출)
 	// 로컬(본인 화면)에서만 영향 있음 - 다른 플레이어가 보는 내 모습과는 무관
 	UFUNCTION(BlueprintCallable)
@@ -105,6 +109,10 @@ private:
 	// 밸런스 수치 데이터 테이블 (에디터에서 FMatchBalanceSettings 에셋 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Balance")
 	class UDataTable* BalanceDataTable;
+
+	// 공격 스윙 사운드 (에디터에서 할당) - 명중 여부와 무관, 클릭 즉시 재생
+	UPROPERTY(EditDefaultsOnly, Category = "Sound")
+	class USoundBase* SwingSound;
 
 	// 현재 포획 판정 중인 숨는 자
 	UPROPERTY()
