@@ -1,0 +1,168 @@
+// GameDataTypes.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataTable.h"
+#include "GameDataTypes.generated.h"
+
+class UAnimMontage; // FFDEmoteData::Montage 전방 선언
+class UStaticMesh;  // FFDHeadEquipData::HeadMesh 전방 선언
+
+/**
+ * 사물(Prop) 속성 데이터 구조체
+ */
+
+USTRUCT(BlueprintType)
+struct FPropData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// 사물의 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prop")
+	FName Name;
+
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prop")
+	TSoftObjectPtr<UStaticMesh> StaticMesh;
+
+	// 무게
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prop")
+	float Weight;
+
+	// 속도 페널티 (이 물건을 들고 있을 때 이동속도가 얼마나 느려지는지)
+	// 예: 0.8이면 원래 속도의 80%로 느려짐
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prop")
+	float SpeedPenalty;
+
+	// 상호작용 가능한 최대 거리 (LineTrace로 이 거리 안에 있을 때만 잡을 수 있음)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prop")
+	float InteractionDistance;
+
+	// 기본값 설정 (생성자)
+	FPropData()
+		: Name(NAME_None)
+		, Weight(1.0f)
+		, SpeedPenalty(1.0f)
+		, InteractionDistance(200.0f)
+	{
+	}
+};
+
+/**
+ * 게임 전체 밸런스 설정 구조체
+ * 게임 시간, 무적 시간 같은 수치들을 모아둠
+ */
+USTRUCT(BlueprintType)
+struct FMatchBalanceSettings : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// 정찰(숨는) 단계 시간 - 기본 60초
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float ScoutPhaseTime;
+
+	// 본게임 제한 시간 - 기본 300초 (5분) 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float MainGameTimeLimit;
+
+	// 포획 판정 대기 시간 - 기본 15초
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float CaptureJudgeWaitTime;
+
+	// 무르기(봐줌) 무적 시간 - 기본 7초
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float SpareInvincibleTime;
+
+	// 무르기 속도 배율 - 기본 1.5배
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float SpareSpeedMultiplier;
+
+	// 포획 판정 콜리전 반지름 - 기본 80
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float CaptureRadius;
+
+	// 캐릭터 기본 이동속도 - 기본 600
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float DefaultWalkSpeed;
+
+	// 술래 정찰(관전) 모드 이동속도 - 기본 1200
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Balance")
+	float TaggerScoutSpeed;
+
+	// 기본값 설정 (생성자)
+	FMatchBalanceSettings()
+		: ScoutPhaseTime(60.0f)
+		, MainGameTimeLimit(300.0f)
+		, CaptureJudgeWaitTime(15.0f)
+		, SpareInvincibleTime(7.0f)
+		, SpareSpeedMultiplier(1.5f)
+		, CaptureRadius(80.0f)
+		, DefaultWalkSpeed(600.0f)
+		, TaggerScoutSpeed(1200.0f)
+	{
+	}
+};
+
+/**
+ * 이모트(감정표현) 데이터 구조체
+ * UI 목록에 표시될 이모트 하나당 행 하나씩 - 애니메이터가 몽타주 채워넣으면 UI에 자동으로 뜨는 구조
+ */
+USTRUCT(BlueprintType)
+struct FFDEmoteData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// UI 버튼에 표시될 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	FText DisplayName;
+
+	// 실제 재생할 애니메이션 몽타주
+	// AnimBP에서 UpperBody(또는 그에 준하는) 슬롯으로 설정되어 있어야 이동 중에도 하체가 안 멈춤
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	UAnimMontage* Montage;
+
+	// UI 버튼 아이콘
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Emote")
+	UTexture2D* Icon;
+
+	// 기본값 설정 (생성자)
+	FFDEmoteData()
+		: DisplayName(FText::GetEmpty())
+		, Montage(nullptr)
+		, Icon(nullptr)
+	{
+	}
+};
+
+/**
+ * 동상 머리 장비 데이터 구조체
+ * 필드의 동상 오브젝트와 상호작용하면 이 중 하나를 골라 Hider 캐릭터 머리에 장착함
+ */
+USTRUCT(BlueprintType)
+struct FFDHeadEquipData : public FTableRowBase
+{
+	GENERATED_BODY()
+
+public:
+	// UI/로그에 표시될 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	FText DisplayName;
+
+	// 동상 머리 메시 (자주 안 바뀌는 리소스라 TSoftObjectPtr로 필요할 때만 로드)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	TSoftObjectPtr<UStaticMesh> HeadMesh;
+
+	// 머리 소켓에 붙일 때 위치/회전/크기 미세 보정용 (동상마다 원점이 다를 수 있어서)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equip")
+	FTransform AttachOffset;
+
+	// 기본값 설정 (생성자)
+	FFDHeadEquipData()
+		: DisplayName(FText::GetEmpty())
+		, AttachOffset(FTransform::Identity)
+	{
+	}
+};
