@@ -20,6 +20,9 @@ class FUNNYORDIE_API AFDPlayerController : public APlayerController
 public:
 	AFDPlayerController();
 
+	// 캐릭터 Possess 시 입력 모드 및 IMC 보장 처리
+	virtual void OnPossess(APawn* InPawn) override;
+
 	// 서버 → 술래 클라이언트: 포획 팝업 UI 활성화
 	UFUNCTION(Client, Reliable)
 	void Client_ShowCapturePopup();
@@ -39,7 +42,7 @@ public:
 	UFUNCTION(Client, Reliable) // 이동 잠금 RPC
 	void Client_LockMovement();
 
-	UFUNCTION(Client, Reliable) // 이동 잠금 해제 RPC (아직 쓰이는 곳은 없음)
+	UFUNCTION(Client, Reliable) // 이동 잠금 해제 RPC
 	void Client_UnlockMovement();
 	
 	// 관전 시점을 지정한 액터로 이동
@@ -53,8 +56,6 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 
-	// GameMode/GameState 수정 없이, GameState의 EMatchPhase 변화를 직접 감지해서
-	// 정찰(60초)/본게임(300초)/엔딩 브금을 그때그때 전환하기 위함 (Tagger/Hider의 정찰 속도 감지와 동일 패턴)
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
@@ -62,35 +63,35 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputMappingContext* DefaultMappingContext;
 
-	// 페인팅 전용 매핑 컨텍스트 (에디터에서 할당) - 이동/카메라랑 겹치지 않게 분리
+	// 페인팅 전용 매핑 컨텍스트 (에디터에서 할당)
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputMappingContext* CustomizationMappingContext;
 
-	// 마우스 좌클릭 공격 인풋 액션 (에디터에서 할당)
+	// 마우스 좌클릭 공격 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Attack;
 
-	// 이동 인풋 액션 (에디터에서 할당)
+	// 이동 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Move;
 	
-	// 점프 인풋 액션 (에디터에서 할당)
+	// 점프 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Jump;
 
-	// 카메라 회전 인풋 액션 (에디터에서 할당)
+	// 카메라 회전 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Look;
 	
-	// 봐주기 키 인풋 액션 (에디터에서 할당) — 술래 전용
+	// 봐주기 키 인풋 액션 — 술래 전용
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Spare;
 
-	// 채색(페인팅) 인풋 액션 - 마우스 좌클릭 드래그로 그림 (CustomizationMappingContext 전용)
+	// 채색(페인팅) 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Paint;
 
-	// 이모트 메뉴 홀드 인풋 액션 (에디터에서 할당) - 누르고 있는 동안만 열림, 이동 허용이라 기본 IMC에 그대로 포함
+	// 이모트 메뉴 홀드 인풋 액션
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_EmoteMenu;
 	
@@ -102,19 +103,19 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_UseThrowItem;
 
-	// 시점 전환 키 (1인칭 ↔ 3인칭, 기본값 3인칭) - 술래/하이더 공용
+	// 시점 전환 키 (1인칭 ↔ 3인칭) - 술래/하이더 공용
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_ToggleView;
 	
-	// 포획 팝업 위젯 블루프린트 클래스 (에디터에서 WBP 할당) -> 부모클래스 변경
+	// 포획 팝업 위젯 블루프린트 클래스
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<class UFDCapturePopupWidget> CaptureWidgetClass;
 	
-	// 현재 뷰포트에 떠있는 포획 팝업 위젯 인스턴스 -> 마찬가지
+	// 현재 뷰포트에 떠있는 포획 팝업 위젯 인스턴스
 	UPROPERTY()
 	class UFDCapturePopupWidget* CaptureWidgetInstance;
 
-	// 이모트 메뉴 위젯 블루프린트 클래스 (에디터에서 WBP_FDEmoteMenu 할당)
+	// 이모트 메뉴 위젯 블루프린트 클래스
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UFDEmoteMenuWidget> EmoteMenuWidgetClass;
 
@@ -122,53 +123,28 @@ private:
 	UPROPERTY()
 	UFDEmoteMenuWidget* EmoteMenuWidgetInstance;
 
-	// 투사체를 던진 뒤 3인칭 카메라로 복귀시키기 전 대기하는 타이머
-	// (던지자마자 바로 3인칭으로 전환하면 시점이 확 바뀌어서 멀미를 유발해 텀을 둠)
 	FTimerHandle ThrowCameraReturnTimerHandle;
 	
-	// 마우스 좌클릭 → 서버에 공격 요청
 	void Input_Attack(const FInputActionValue& Value);
-
-	// 이동 입력 처리
 	void Input_Move(const FInputActionValue& Value);
-	
-	// 점프 입력 처리
 	void Input_Jump(const FInputActionValue& Value);
-
-	// 카메라 회전 입력 처리
 	void Input_Look(const FInputActionValue& Value);
-	
-	// 봐주기 키 입력 처리 → 서버에 봐주기 요청
 	void Input_Spare(const FInputActionValue& Value);
-
-	// 투명화
 	void Input_UseInvisibility(const FInputActionValue& Value);
-	
-	// 투사체
 	void Input_UseThrowItem(const FInputActionValue& Value);
-
-	// 시점 전환 입력 처리 - 술래/하이더 공용 (조종 중인 폰 타입에 맞춰 알아서 분기됨)
 	void Input_ToggleView(const FInputActionValue& Value);
 
-	// 페인팅 입력 처리 - Started/Triggered/Completed 각각 스트로크 시작/중간/끝에 대응
 	void Input_PaintStart(const FInputActionValue& Value);
 	void Input_PaintOngoing(const FInputActionValue& Value);
 	void Input_PaintEnd(const FInputActionValue& Value);
 
-	// 커서 아래를 트레이스해서 자기 캐릭터 메시 UV를 뽑아내고, 커스터마이징 컴포넌트에 페인팅 요청
 	void TryPaintAtCursor(bool bStrokeStart, bool bStrokeEnd);
 
-	// 이모트 메뉴 홀드 입력 처리 - 누르는 동안만 열림, 떼면 바로 닫힘
 	void Input_EmoteMenuHoldStart(const FInputActionValue& Value);
 	void Input_EmoteMenuHoldEnd(const FInputActionValue& Value);
 
-	// 실제로 메뉴를 열고 닫는 함수 - 이동/카메라는 계속 허용되게 FInputModeGameAndUI 사용
 	void ToggleEmoteMenu(bool bOpen);
 
-	// 직전 프레임까지 확인한 매치 페이즈 - Tick에서 변화 감지용 (중복 호출 방지)
-	// Warmup으로 시작 = 접속 직후엔 브금 없음
 	EMatchPhase LastPhase = EMatchPhase::Warmup;
-
-	// 페이즈가 바뀌었을 때 그에 맞는 브금으로 전환 (Tick에서 변화 감지 시 호출)
 	void UpdatePhaseMusic(EMatchPhase NewPhase);
 };

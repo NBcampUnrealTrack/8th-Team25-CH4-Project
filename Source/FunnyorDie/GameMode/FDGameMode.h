@@ -4,10 +4,13 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameDataTypes.h"
 #include "FDGameMode.generated.h"
+
 class ACharacter;
+
 // 게임 단계 enum
 UENUM(BlueprintType)
 enum class EMatchPhase : uint8 { Warmup, AssignRole, Scouting, InGame, GameOver };
+
 UCLASS()
 class FUNNYORDIE_API AFDGameMode : public AGameModeBase
 {
@@ -22,7 +25,10 @@ public:
 	// ErrorMessage에 값을 채우면 엔진이 그 접속을 튕겨냄 -> 난입 차단
 	virtual void PreLogin(const FString& Options, const FString& Address,
 						  const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
-	
+
+	// Seamless Travel로 넘어온 컨트롤러가 AFDPlayerController가 아닐 경우 교체(Swap) 처리
+	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
+
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Spawning")
 	TSubclassOf<ACharacter> TaggerClass;
@@ -76,8 +82,6 @@ protected:
 	
 public:
 	void RequestCaptureJudgement(class AFDTaggerCharacter* TaggerCharacter, ACharacter* HiderCharacter); // 포획 판정 시작
-	// 태그가 Hider, Tagger라서 character 변수명은 뒤에 character 붙임
-
 	void ResolveCapture(ACharacter* HiderCharacter, bool bWasCaptured); // 포획 최종 확인
 	FTimerHandle PhaseTimerHandle; // 단계 전환용 타이머
 };

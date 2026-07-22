@@ -84,7 +84,7 @@ public:
 protected:
 	// 호스트가 CreateSession 성공 후 ServerTravel할 맵
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Session")
-	FString LobbyLevelPath = TEXT("/Game/FunnyorDie/LevelDesign/LobbyMaps");
+	FString LobbyLevelPath = TEXT("/Game/FunnyorDie/LevelDesign/LobbyMap/LobbyMaps");
 
 	UPROPERTY(EditDefaultsOnly, Category = "FD|Session")
 	int32 MaxPlayers = 8;

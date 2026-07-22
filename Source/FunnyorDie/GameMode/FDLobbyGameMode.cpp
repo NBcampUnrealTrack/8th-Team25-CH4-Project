@@ -21,6 +21,12 @@ AFDLobbyGameMode::AFDLobbyGameMode()
 	// 이 레벨에 접속하는 모든 플레이어는 AFDLobbyPlayerController를 받음
 	
 	DefaultPawnClass = nullptr;
+
+	// Lobby -> InGame 처럼 이미 연결된 세션 안에서 맵만 갈아탈 때
+	// 클라이언트가 완전 재접속을 시도하지 않고 매끄럽게 넘어가도록 함.
+	// EOS P2P 커넥션에서는 이 옵션이 꺼져 있으면(기본값 false) 맵 전환 중 접속이
+	// 불안정해질 수 있어서 패키지 빌드에서는 반드시 켜두는 게 안전함.
+	bUseSeamlessTravel = true;
 }
 
 void AFDLobbyGameMode::PostLogin(APlayerController* NewPlayer)

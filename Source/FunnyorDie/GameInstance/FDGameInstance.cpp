@@ -39,14 +39,25 @@ void UFDGameInstance::Init()
 		return;
 	}
 
-	// 로그인 완료 콜백 등록 후 AutoLogin 호출
+	// 로그인 완료 콜백 등록
 	Identity->AddOnLoginCompleteDelegate_Handle(
 		0, FOnLoginCompleteDelegate::CreateUObject(this, &UFDGameInstance::OnLoginComplete));
 
 	SetStatus(EFDSessionStatus::LoggingIn);
-	Identity->AutoLogin(0);
 
-	UE_LOG(LogTemp, Log, TEXT("[EOS] AutoLogin 요청 (서브시스템: %s)"), *OSS->GetSubsystemName().ToString());
+	// AutoLogin()은 에디터에서만 Account Portal을 자동으로 처리해주고,
+	// 패키지 빌드(Standalone)에서는 커맨드라인 인자나 ini 계정 정보가 없으면 그냥 실패함.
+	// 그래서 패키지에서도 동작하도록 Login()으로 Account Portal 로그인을 명시적으로 요청.
+	// (Epic Games Launcher로 배포할 계획이 생기면, 그때는 커맨드라인의 -AUTH_TYPE=exchangecode
+	//  값을 파싱해서 Credentials.Type에 넣는 방식으로 바꿔야 함)
+	FOnlineAccountCredentials Credentials;
+	Credentials.Type  = TEXT("accountportal");
+	Credentials.Id    = TEXT("");
+	Credentials.Token = TEXT("");
+
+	Identity->Login(0, Credentials);
+
+	UE_LOG(LogTemp, Log, TEXT("[EOS] Login(accountportal) 요청 (서브시스템: %s)"), *OSS->GetSubsystemName().ToString());
 }
 
 void UFDGameInstance::OnLoginComplete(int32 LocalUserNum, bool bWasSuccessful,
