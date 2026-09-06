@@ -1,13 +1,25 @@
 // FDCustomizationTypes.h
-// 캐릭터 채색(커스터마이징) 관련 공용 구조체 모음
-// Hider/Tagger 양쪽 캐릭터가 공통으로 사용하기 위해 별도 파일로 분리함
+// 캐릭터 색상 커스터마이징 공용 구조체
+
+/*
+자유 페인팅(RenderTarget 브러시 + PNG 스냅샷 복제) 구조는 이 버전에서 제거했다.
+제거 사유는 세 가지다.
+
+1) 스켈레탈 메시에서 FindCollisionUV로 UV를 얻으려면 per-poly 콜리전이 필요한데
+   비용이 크고 스켈레탈에서는 UV 정보가 항상 쿠킹된다는 보장도 없다.
+2) 완성된 그림을 PNG로 압축해 PlayerState 프로퍼티로 복제하는 구조라
+   프로퍼티 하나가 수십에서 수백 KB가 된다. 파티 게임 대역폭으로 감당이 안 된다.
+3) 스트로크가 끝날 때마다 ReadPixels로 GPU 리드백을 걸어 프레임이 멈춘다.
+
+대신 확실히 동작하고 눈으로 검증 가능한 범위인 파츠 색상 스왑만 남겼다.
+이전 구현은 git 히스토리에 그대로 있다.
+*/
 
 #pragma once
 #include "CoreMinimal.h"
 #include "FDCustomizationTypes.generated.h"
 
-// 파츠별 색상 슬롯 (머티리얼 파라미터 스왑 방식)
-// 에디터에서 캐릭터 머티리얼에 만들어둔 벡터 파라미터 이름과 순서를 맞춰서 사용
+// 파츠별 색상 슬롯 - 캐릭터 머티리얼의 벡터 파라미터와 순서를 맞춰서 사용
 UENUM(BlueprintType)
 enum class EFDColorSlot : uint8
 {
@@ -17,63 +29,35 @@ enum class EFDColorSlot : uint8
 	MAX         // 개수 세는 용도, 실제 슬롯 아님
 };
 
-// 파라미터 스왑 방식 색상 데이터
-// - 가볍고 즉시 반영 가능해서 매치 중 실시간으로 바꿔도 부담 없음
+// 색상 프리셋 하나 - 팔레트에 미리 정의해두고 인덱스로만 주고받는다
 USTRUCT(BlueprintType)
 struct FFDColorPreset
 {
 	GENERATED_BODY()
 
-	// EFDColorSlot 개수만큼 배열로 관리 (인덱스 = EFDColorSlot 값)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	// UI 버튼에 표시될 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization")
+	FText DisplayName;
+
+	// EFDColorSlot 개수만큼의 배열 (인덱스 = EFDColorSlot 값)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Customization")
 	TArray<FLinearColor> SlotColors;
 
 	FFDColorPreset()
 	{
 		SlotColors.Init(FLinearColor::White, (int32)EFDColorSlot::MAX);
 	}
-};
 
-// 자유 페인팅 결과를 압축해서 저장할 때 쓰는 스냅샷
-// PlayerState에 Replicate 되어 재스폰/재접속/뒤늦은 관전 시 그림 복원용으로 사용됨
-// (RenderTarget 자체는 Replicate가 안 되기 때문에, "완성된 결과 이미지"만 압축해서 들고 다니는 개념)
-USTRUCT(BlueprintType)
-struct FFDPaintSnapshot
-{
-	GENERATED_BODY()
-
-	// PNG로 압축된 RenderTarget 결과 바이트
-	UPROPERTY()
-	TArray<uint8> CompressedPixels;
-
-	// 압축 전 원본 RT 가로/세로 크기 (디코딩 시 필요)
-	UPROPERTY()
-	int32 Width = 0;
-
-	UPROPERTY()
-	int32 Height = 0;
-
-	bool IsValid() const
+	FFDColorPreset(const FText& InName, const FLinearColor& Body,
+	               const FLinearColor& Accent, const FLinearColor& Eyes)
+		: DisplayName(InName)
 	{
-		return CompressedPixels.Num() > 0 && Width > 0 && Height > 0;
+		SlotColors = { Body, Accent, Eyes };
 	}
-};
 
-// 실시간 브러시 스트로크 한 점 - RPC로 자주 오가는 최소 단위
-// Server_StrokePoint는 Unreliable로 보낼 거라 최대한 가볍게 유지해야 함
-USTRUCT(BlueprintType)
-struct FFDStrokePoint
-{
-	GENERATED_BODY()
-
-	// 캐릭터 메시 UV 좌표 (0~1 범위)
-	UPROPERTY()
-	FVector2D UV = FVector2D::ZeroVector;
-
-	UPROPERTY()
-	FLinearColor Color = FLinearColor::White;
-
-	// 브러시 반경 (UV 공간 기준 0~1 사이 값, 예: 0.02 = RT 크기의 2%)
-	UPROPERTY()
-	float BrushRadius = 0.02f;
+	// UI 스와치에 쓸 대표 색 (몸통 색)
+	FLinearColor GetSwatchColor() const
+	{
+		return SlotColors.IsValidIndex(0) ? SlotColors[0] : FLinearColor::White;
+	}
 };
